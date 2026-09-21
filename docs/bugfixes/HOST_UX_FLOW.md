@@ -2,8 +2,24 @@
 
 **Document:** Comprehensive host user experience for room creation and session setup  
 **Branch:** `fix/ux-actions-and-presence`  
-**Status:** Complements BUGFIX-002 and BUGFIX-004  
+**Status:** Complements BUGFIX-002 and BUGFIX-004 · **Some sections describe target/future UI, not current behavior — see note below**  
 **Target Audience:** Product, Design, QA, Developers
+
+> **⚠️ Verification note (added during FEAT-003 scoping, 2026-09-21):**
+> This document was checked against the actual client code
+> (`RoomEditor.tsx`, `SessionControls.tsx`, `App.tsx`). **Part 8's "State 2:
+> Active Phase" and "State 3: Ended Phase" mockups are not implemented** —
+> there is no rendered turn timer/countdown, no "Current Driver" readout,
+> and no "Session Ended" / "Return to Lobby" screen anywhere in the client
+> today. Part 3 (Turn Management) and Part 9 (Multi-Tab Testing) similarly
+> describe timer displays and manual-driver-assignment UI that do not exist
+> yet (consistent with this document's own Part 10 "Known Limitations",
+> which correctly lists these as "❌ Not Implemented"). These gaps are now
+> formally tracked and scoped in
+> `docs/requirements/FEAT-003-session-ux-completion/` (REQ-026/027 for the
+> timer, REQ-028 for driver display, REQ-030 for manual assignment, REQ-037
+> for the session-ended screen). Treat the mockups below as **target UX**
+> for that feature's implementation, not a description of what exists now.
 
 ---
 
@@ -615,9 +631,13 @@ T+5:00  Host decides to end session
 
 ## Part 8: UI Component States
 
+> **Note:** "State 2" and "State 3" below describe **target UI, not yet
+> implemented** (see verification note at top of document). Tracked as
+> FEAT-003 Tasks 2, 3, and 11.
+
 ### Host Controls Panel States
 
-**State 1: Created Phase**
+**State 1: Created Phase** *(implemented)*
 ```
 ┌─ Host Controls ────────────────────┐
 │                                    │
@@ -626,7 +646,7 @@ T+5:00  Host decides to end session
 └────────────────────────────────────┘
 ```
 
-**State 2: Active Phase**
+**State 2: Active Phase** *(target — timer/driver readout not yet built, FEAT-003 Tasks 2/3)*
 ```
 ┌─ Host Controls ────────────────────┐
 │                                    │
@@ -638,7 +658,7 @@ T+5:00  Host decides to end session
 └────────────────────────────────────┘
 ```
 
-**State 3: Ended Phase**
+**State 3: Ended Phase** *(target — session-ended screen not yet built, FEAT-003 Task 11)*
 ```
 ┌─ Host Controls ────────────────────┐
 │                                    │
@@ -812,7 +832,7 @@ The host UX flow covers:
 
 ## Cross-Reference to Bugfix Specs
 
-| UX Flow Section | Related Bugfix | Related Requirement |
+| UX Flow Section | Related Bugfix/Feature | Related Requirement |
 |-----------------|----------------|-------------------|
 | Room Creation | — | REQ-001 (Create room) |
 | Configuration | BUGFIX-002 | REQ-007 (Turn config) |
@@ -821,12 +841,19 @@ The host UX flow covers:
 | Turn Management | BUGFIX-002, BUGFIX-003 | REQ-009, REQ-010 |
 | Roster Display | BUGFIX-004 | REQ-002 (Roster) |
 | Early-End Button | BUGFIX-003 | REQ-010.3 (Early end) |
+| Turn Timer / Countdown *(not implemented)* | **FEAT-003** | REQ-025, REQ-026, REQ-027 |
+| Current Driver Display *(not implemented)* | **FEAT-003** | REQ-028, REQ-029 |
+| Manual Driver Assignment UI *(not implemented)* | **FEAT-003** | REQ-030 |
+| Disconnect Grace Period Dialog *(not implemented)* | **FEAT-003** | REQ-032, REQ-033 |
+| Session Ended Screen *(not implemented)* | **FEAT-003** | REQ-037 |
 
 ---
 
 ## Document Version
 
-- **Version:** 1.0
-- **Date:** 2026-09-21
-- **Status:** Complete
-- **Branch:** fix/ux-actions-and-presence
+- **Version:** 1.1
+- **Date:** 2026-09-21 (verification note + FEAT-003 cross-references added)
+- **Status:** Complete as a UX walkthrough; sections flagged above describe
+  target UI now scoped under FEAT-003, not current behavior
+- **Branch:** fix/ux-actions-and-presence (original) · reviewed against
+  feat/003--session-ux-completion

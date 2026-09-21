@@ -157,6 +157,12 @@ applicable, ending by wiring into the running app. No orphaned code.
   - Update `docs/bugfixes/INDEX.md` cross-references accordingly.
   - Update root `README.md` feature list to mention FEAT-003 alongside
     FEAT-001/002, consistent with existing convention.
+  - Correct `docs/bugfixes/HOST_UX_FLOW.md` §8 ("UI Component States") to
+    clearly label the "Active Phase" current-driver/timer readout and the
+    "Ended Phase" screen as target/future states (implemented by this
+    feature's Tasks 2/3/11), not current behavior — verified during
+    FEAT-003 scoping that neither exists in `SessionControls.tsx`/`App.tsx`
+    today (see `requirements.md` §6).
   - **Requirements:** documentation hygiene, no functional requirement.
   - **Verified:** manual review — no dangling references to superseded
     "deferred" language describing now-implemented functionality.

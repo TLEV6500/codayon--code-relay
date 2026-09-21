@@ -376,3 +376,25 @@ originally tracked as bugfixes:
 - **`docs/bugfixes/BUGFIX-006` (session auto-cleanup, not yet written)** —
   remains a separate, deferred server-hygiene concern; explicitly out of
   scope for this feature (see §1.4).
+- **`docs/bugfixes/HOST_UX_FLOW.md`** — a pre-existing UX walkthrough/mockup
+  document for the host experience. **Verified against the actual client
+  code** (`RoomEditor.tsx`, `SessionControls.tsx`) during FEAT-003 scoping:
+  most of its "Part 8: UI Component States" mockups (specifically "State 2:
+  Active Phase" showing a "Current Driver" / "Time Remaining" readout, and
+  "State 3: Ended Phase" showing a "Session Ended" / "Return to Lobby"
+  screen) **are not implemented** — there is no timer/countdown display, no
+  rendered current-driver name, and no session-ended teardown view anywhere
+  in the client, despite the document presenting these as existing UI
+  states. The document's own §10 "Known Limitations" section is honest
+  about most of these gaps (manual driver assignment UI, turn timer,
+  disconnect grace period dialog are explicitly listed as "❌ Not
+  Implemented"), but §8's mockups are not clearly marked as aspirational,
+  which could mislead a reviewer into thinking they already exist.
+  Every gap identified in `HOST_UX_FLOW.md` is already covered by this
+  feature's requirements (timer → REQ-026/027, current driver → REQ-028,
+  manual driver picker → REQ-030, grace-period dialog → REQ-032/033,
+  session-ended screen → REQ-037), so **no new requirement was added on
+  its account.** It is retained as a useful target-state UX reference for
+  implementation (see Task cross-references in `tasks.md` §7) and should be
+  corrected to clearly label §8's "State 2"/"State 3" mockups as
+  target/future states rather than current behavior.
