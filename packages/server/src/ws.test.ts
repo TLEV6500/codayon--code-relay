@@ -599,6 +599,76 @@ describe("disconnect grace period (REQ-032, FEAT-003 Task 6)", () => {
     expect(msg.newDriver).toBe("p2");
   });
 
+  test("WebSocket open handler emits RoleAssignedMsg to connecting participant", async () => {
+    const createRes = await createRoom();
+    const ws = await connect(createRes.code, createRes.clientToken);
+
+    // Wait for RoleAssignedMsg on open
+    const roleMsg = await nextMessage(ws, (m) => m.type === "roleAssigned");
+    expect(roleMsg.type).toBe("roleAssigned");
+    expect(roleMsg.channel).toBe("control");
+
+    if (roleMsg.type === "roleAssigned") {
+      expect(roleMsg.participantId).toBeDefined();
+      expect(roleMsg.role).toBe("host");
+      expect(roleMsg.hostParticipation).toBe("host-participant");
+    }
+
+    ws.close();
+  });
+
+  test("RoleAssignedMsg is sent to observer participant on connection", async () => {
+    const createRes = await createRoom();
+    const joinRes = await joinRoom(createRes.code);
+    const ws = await connect(createRes.code, joinRes.clientToken);
+
+    // Wait for RoleAssignedMsg on open
+    const roleMsg = await nextMessage(ws, (m) => m.type === "roleAssigned");
+    expect(roleMsg.type).toBe("roleAssigned");
+
+    if (roleMsg.type === "roleAssigned") {
+      expect(roleMsg.role).toBe("observer");
+      expect(roleMsg.hostParticipation).toBe("host-participant");
+    }
+
+    ws.close();
+  });
+
+  test("RoleAssignedMsg is sent on reconnect", async () => {
+    const createRes = await createRoom();
+    const joinRes = await joinRoom(createRes.code);
+
+    // First connection
+    const ws1 = await connect(createRes.code, joinRes.clientToken);
+    const roleMsg1 = await nextMessage(ws1, (m) => m.type === "roleAssigned");
+    expect(roleMsg1.type).toBe("roleAssigned");
+    if (roleMsg1.type === "roleAssigned") {
+      expect(roleMsg1.role).toBe("observer");
+    }
+    ws1.close();
+
+    // Reconnect with same token
+    const ws2 = await connect(createRes.code, joinRes.clientToken);
+    const roleMsg2 = await nextMessage(ws2, (m) => m.type === "roleAssigned");
+    expect(roleMsg2.type).toBe("roleAssigned");
+    if (roleMsg2.type === "roleAssigned") {
+      expect(roleMsg2.role).toBe("observer");
+    }
+    ws2.close();
+  });
+
+  test("RoleAssignedMsg includes hostParticipation mode from session", async () => {
+    const createRes = await createRoom();
+    const ws = await connect(createRes.code, createRes.clientToken);
+
+    const roleMsg = await nextMessage(ws, (m) => m.type === "roleAssigned");
+    if (roleMsg.type === "roleAssigned") {
+      expect(["admin-only", "host-participant"]).toContain(roleMsg.hostParticipation);
+    }
+
+    ws.close();
+  });
+
   test("turnScheduler supports grace period timers", () => {
     const { scheduleGracePeriod, cancelGracePeriod, clearAllTimers: clearTimers } = require("./turnScheduler");
     

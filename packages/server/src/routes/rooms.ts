@@ -104,7 +104,8 @@ export function roomRoutes(registry: RoomRegistry): Hono {
   // REQ-002.4 — bootstrap the current authoritative document + roster.
   api.get("/rooms/:code/bootstrap", (c) => {
     const code = c.req.param("code");
-    const result = registry.bootstrap(code);
+    const clientToken = c.req.query("clientToken") ?? undefined;
+    const result = registry.bootstrap(code, clientToken);
     if (result === "not-found" || result === "ended") {
       return c.json(
         { error: "room-unavailable", message: "That room is unavailable." },

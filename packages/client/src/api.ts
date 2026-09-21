@@ -25,6 +25,9 @@ export interface BootstrapResponse {
   doc: string;
   phase: "created" | "active" | "ended";
   roster: { id: string; name: string; role: Role; connected: boolean }[];
+  participantId?: string;
+  role?: Role;
+  hostParticipation?: HostParticipation;
 }
 
 async function jsonOrThrow<T>(res: Response): Promise<T> {
@@ -59,7 +62,11 @@ export async function joinRoom(
   return jsonOrThrow<JoinRoomResponse>(res);
 }
 
-export async function bootstrapRoom(code: string): Promise<BootstrapResponse> {
-  const res = await fetch(`/api/rooms/${code}/bootstrap`);
+export async function bootstrapRoom(code: string, clientToken?: string): Promise<BootstrapResponse> {
+  const url = new URL(`/api/rooms/${code}/bootstrap`, window.location.origin);
+  if (clientToken) {
+    url.searchParams.set("clientToken", clientToken);
+  }
+  const res = await fetch(url.toString());
   return jsonOrThrow<BootstrapResponse>(res);
 }

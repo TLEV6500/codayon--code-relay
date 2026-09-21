@@ -66,6 +66,9 @@ export interface BootstrapResult {
     readonly role: Role;
     readonly connected: boolean;
   }[];
+  readonly participantId?: ParticipantId;
+  readonly role?: Role;
+  readonly hostParticipation?: HostParticipation;
 }
 
 /** Reasons a join/bootstrap can be denied (REQ-002.2, REQ-004.3). */
@@ -168,7 +171,7 @@ export class RoomRegistry {
   }
 
   /** REQ-002.4: current authoritative document + presence-less roster snapshot. */
-  bootstrap(code: string): BootstrapResult | RoomError {
+  bootstrap(code: string, clientToken?: string): BootstrapResult | RoomError {
     const room = this.rooms.get(code);
     if (!room) return "not-found";
     if (room.session.phase === "ended") return "ended";
@@ -181,6 +184,26 @@ export class RoomRegistry {
     }));
 
     const snapshot = room.doc.getDocument();
+
+    // If clientToken is provided, include the participant's role + host participation (REQ-035)
+    if (clientToken) {
+      const participantId = room.clientTokens.get(clientToken);
+      if (participantId) {
+        const participant = room.session.participants.get(participantId);
+        if (participant) {
+          return {
+            version: snapshot.version,
+            doc: snapshot.doc,
+            phase: room.session.phase,
+            roster,
+            participantId,
+            role: participant.role,
+            hostParticipation: room.session.hostParticipation,
+          };
+        }
+      }
+    }
+
     return {
       version: snapshot.version,
       doc: snapshot.doc,

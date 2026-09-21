@@ -11,6 +11,7 @@ import type {
   TurnConfig,
   TimerTickMsg,
   DisconnectGraceStartedMsg,
+  RoleAssignedMsg,
 } from "@codayon/shared";
 import { bootstrapRoom } from "../api";
 import { connectRelay, type RelayConnection } from "../collab/transport";
@@ -58,6 +59,7 @@ export const RoomEditor: Component<RoomEditorProps> = (props) => {
   const [currentDriver, setCurrentDriver] = createSignal<string | null>(null);
   const [currentDriverName, setCurrentDriverName] = createSignal<string | null>(null);
   const [turnNumber, setTurnNumber] = createSignal<number | null>(null);
+  const [role, setRole] = createSignal<"host" | "observer" | "spectator">(props.role);
   const [roster, setRoster] = createSignal<
     readonly {
       readonly id: string;
@@ -84,7 +86,7 @@ export const RoomEditor: Component<RoomEditorProps> = (props) => {
   const [graceState, setGraceState] = createSignal<GraceState | null>(null);
 
   onMount(async () => {
-    const boot = await bootstrapRoom(props.code);
+    const boot = await bootstrapRoom(props.code, props.clientToken);
     connection = await connectRelay({
       code: props.code,
       clientToken: props.clientToken,
@@ -93,11 +95,22 @@ export const RoomEditor: Component<RoomEditorProps> = (props) => {
     // Set initial session state from bootstrap
     setSessionPhase(boot.phase);
     setRoster(boot.roster);
+    
+    // Use server-confirmed role from bootstrap if available (REQ-035)
+    if (boot.role) {
+      setRole(boot.role);
+    }
 
     // Subscribe to session/turn updates
     connection.onMessage((msg: ServerMessage) => {
       if (msg.channel === "control") {
-        if (msg.type === "sessionSnapshot") {
+        if (msg.type === "roleAssigned") {
+          // Role confirmation on join/reconnect (REQ-035)
+          const roleMsg = msg as RoleAssignedMsg;
+          if (roleMsg.participantId === props.clientID) {
+            setRole(roleMsg.role);
+          }
+        } else if (msg.type === "sessionSnapshot") {
           const snapshot = msg as SessionSnapshotMsg;
           setSessionPhase(snapshot.phase);
           setTurnConfig(snapshot.turnConfig);

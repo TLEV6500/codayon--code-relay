@@ -102,6 +102,19 @@ export function createWebSocketHandler(
         const oldState = room.session;
         room.session = applyConnection(room.session, ws.data.participantId, true);
 
+        // Emit role confirmation on join/reconnect (REQ-035)
+        const participant = room.session.participants.get(ws.data.participantId);
+        if (participant) {
+          const roleMsg: ServerMessage = {
+            channel: "control",
+            type: "roleAssigned",
+            participantId: ws.data.participantId,
+            role: participant.role,
+            hostParticipation: room.session.hostParticipation,
+          };
+          send(ws, roleMsg);
+        }
+
         // Handle grace period resumption if driver reconnects (REQ-032)
         if (
           oldState.disconnectState &&
