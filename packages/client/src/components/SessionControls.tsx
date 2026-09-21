@@ -430,15 +430,32 @@ export const SessionControls: Component<SessionControlsProps> = (props) => {
         </div>
       </Show>
 
-      {/* Driver Early-End Button */}
-      <Show when={props.isCurrentDriver && props.turnConfig?.mode === "fixed-early-end"}>
+      {/* Driver Early-End Button (REQ-038: show enabled or disabled based on mode) */}
+      <Show when={props.isCurrentDriver}>
         <div class="border border-slate-700 rounded-lg p-3 bg-slate-900/60">
-          <button
-            onClick={handleEarlyEnd}
-            class="w-full px-3 py-2 bg-amber-600 hover:bg-amber-500 text-white font-semibold rounded text-sm"
+          <Show
+            when={props.turnConfig?.mode === "fixed-early-end"}
+            fallback={
+              <div class="flex flex-col gap-2">
+                <button
+                  disabled
+                  class="w-full px-3 py-2 bg-slate-700 text-slate-400 font-semibold rounded text-sm cursor-not-allowed opacity-60"
+                >
+                  End Turn Early
+                </button>
+                <p class="text-xs text-slate-400 text-center">
+                  Early end not enabled for this session
+                </p>
+              </div>
+            }
           >
-            End Turn Early
-          </button>
+            <button
+              onClick={handleEarlyEnd}
+              class="w-full px-3 py-2 bg-amber-600 hover:bg-amber-500 text-white font-semibold rounded text-sm"
+            >
+              End Turn Early
+            </button>
+          </Show>
         </div>
       </Show>
 
