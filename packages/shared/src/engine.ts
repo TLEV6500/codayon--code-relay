@@ -16,6 +16,7 @@ import type {
   Participant,
   ParticipantId,
   Role,
+  RotationState,
   SessionState,
   Turn,
   TurnConfig,
@@ -98,6 +99,7 @@ export function createSession(input: CreateSessionInput): SessionState {
     participants: new Map([[host.id, host]]),
     editTokenHolder: null,
     currentTurn: null,
+    rotation: null,
   };
 }
 
@@ -143,6 +145,30 @@ function isValidConfig(config: TurnConfig): boolean {
   return true;
 }
 
+/**
+ * Initialize round-robin rotation from current eligible participants.
+ * (REQ-011.1: deterministic order based on insertion order).
+ */
+function initializeRotation(state: SessionState): RotationState | null {
+  if (!state.turnConfig || state.turnConfig.selectionPolicy !== "round-robin") {
+    return null;
+  }
+
+  // Collect eligible participants in insertion order.
+  const order: ParticipantId[] = [];
+  for (const [id, _participant] of state.participants) {
+    if (isEligibleForToken(state, id)) {
+      order.push(id);
+    }
+  }
+
+  return {
+    order: order as readonly ParticipantId[],
+    nextIndex: 0,
+    hasDrivenInCycle: new Set<ParticipantId>(),
+  };
+}
+
 /** Pure reducer. Invalid transitions return the input state unchanged. */
 export function applyEvent(state: SessionState, event: EngineEvent): SessionState {
   // No mutations are accepted once the session has ended (REQ-004.3).
@@ -160,7 +186,29 @@ export function applyEvent(state: SessionState, event: EngineEvent): SessionStat
         name: event.name,
         connected: true,
       });
-      return withParticipants(state, next);
+      const newState = withParticipants(state, next);
+
+      // If round-robin and the new participant is eligible, recalculate rotation (REQ-011.2, REQ-025).
+      if (newState.rotation && isEligibleForToken(newState, event.id)) {
+        // Fair late-comer insertion: place after those who haven't driven in this cycle.
+        const hasNotDriven = newState.rotation.order.filter(
+          (id) => !newState.rotation!.hasDrivenInCycle.has(id),
+        );
+        const hasDriven = newState.rotation.order.filter((id) =>
+          newState.rotation!.hasDrivenInCycle.has(id),
+        );
+
+        // Insert late-comer after those who haven't driven yet (at the end of hasNotDriven section).
+        const newOrder = [...hasNotDriven, event.id, ...hasDriven];
+        const newRotation: RotationState = {
+          ...newState.rotation,
+          order: newOrder as readonly ParticipantId[],
+        };
+
+        return { ...newState, rotation: newRotation };
+      }
+
+      return newState;
     }
 
     case "participantLeft": {
@@ -169,7 +217,30 @@ export function applyEvent(state: SessionState, event: EngineEvent): SessionStat
       if (!state.participants.has(event.id)) return state;
       const next = new Map(state.participants);
       next.delete(event.id);
-      return withParticipants(state, next);
+      const newState = withParticipants(state, next);
+
+      // If round-robin, remove from rotation and potentially adjust nextIndex (REQ-011.3).
+      if (newState.rotation) {
+        const newOrder = newState.rotation.order.filter((id) => id !== event.id);
+        let newIndex = newState.rotation.nextIndex;
+        // If we removed someone before or at nextIndex, don't change index (it now points to the next person).
+        // If newOrder is now empty, wrap to 0.
+        if (newOrder.length === 0) {
+          newIndex = 0;
+        } else if (newIndex >= newOrder.length) {
+          newIndex = 0; // Wrap around.
+        }
+
+        const newRotation: RotationState = {
+          ...newState.rotation,
+          order: newOrder as readonly ParticipantId[],
+          nextIndex: newIndex,
+        };
+
+        return { ...newState, rotation: newRotation };
+      }
+
+      return newState;
     }
 
     case "connectionChanged": {
@@ -186,7 +257,14 @@ export function applyEvent(state: SessionState, event: EngineEvent): SessionStat
       if (!isHost(state, event.by)) return state;
       if (state.phase !== "created") return state;
       if (!isValidConfig(event.config)) return state;
-      return { ...state, turnConfig: event.config };
+
+      // Initialize rotation if round-robin policy is selected (REQ-011.1).
+      const newRotation = initializeRotation({
+        ...state,
+        turnConfig: event.config,
+      });
+
+      return { ...state, turnConfig: event.config, rotation: newRotation };
     }
 
     case "sessionStarted": {
@@ -263,11 +341,37 @@ export function applyEvent(state: SessionState, event: EngineEvent): SessionStat
         ended: false,
       };
 
-      return {
+      let newState: SessionState = {
         ...state,
         currentTurn: newTurn,
         editTokenHolder: event.nextDriver,
       };
+
+      // If round-robin, update rotation state (REQ-011.1: deterministic advance).
+      if (newState.rotation && state.currentTurn) {
+        // Mark the driver who just finished as having driven in this cycle.
+        const newHasDriven = new Set(newState.rotation.hasDrivenInCycle);
+        newHasDriven.add(state.currentTurn.driverId);
+
+        // Advance nextIndex. If all drivers have driven, reset for next cycle (REQ-011.1).
+        let newNextIndex = (newState.rotation.nextIndex + 1) % newState.rotation.order.length;
+        let newHasDrivenReset = newHasDriven;
+        if (newHasDriven.size === newState.rotation.order.length) {
+          // All have driven in this cycle; reset for next cycle.
+          newHasDrivenReset = new Set<ParticipantId>();
+          newNextIndex = (newState.rotation.nextIndex + 1) % newState.rotation.order.length;
+        }
+
+        const newRotation: RotationState = {
+          ...newState.rotation,
+          nextIndex: newNextIndex,
+          hasDrivenInCycle: newHasDrivenReset,
+        };
+
+        newState = { ...newState, rotation: newRotation };
+      }
+
+      return newState;
     }
 
     case "earlyEndRequested": {

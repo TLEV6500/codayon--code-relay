@@ -517,3 +517,97 @@ describe("early-end (REQ-010.3/4, REQ-024)", () => {
     expect(s2).toBe(s);
   });
 });
+
+describe("round-robin rotation (REQ-008, REQ-011, REQ-025)", () => {
+  function baseRoundRobin(): SessionState {
+    return createSession({
+      roomId: "room-1",
+      hostId: "host-1",
+      hostName: "Host",
+      hostParticipation: "host-participant", // Host participates in rotation.
+    });
+  }
+
+  test("rotation initializes when round-robin is configured", () => {
+    const s = reduce(baseRoundRobin(), [
+      { type: "participantJoined", id: "p1", name: "Ann", role: "observer" },
+      { type: "participantJoined", id: "p2", name: "Bo", role: "observer" },
+      {
+        type: "configured",
+        by: "host-1",
+        config: {
+          mode: "fixed",
+          durationMs: 60_000,
+          selectionPolicy: "round-robin",
+        },
+      },
+    ]);
+
+    expect(s.rotation).toBeTruthy();
+    expect(s.rotation?.order).toEqual(["host-1", "p1", "p2"]);
+    expect(s.rotation?.nextIndex).toBe(0);
+    expect(s.rotation?.hasDrivenInCycle.size).toBe(0);
+  });
+
+  test("rotation is null when manual pass is configured", () => {
+    const s = reduce(base(), [
+      { type: "participantJoined", id: "p1", name: "Ann", role: "observer" },
+      {
+        type: "configured",
+        by: "host-1",
+        config: { mode: "fixed", durationMs: 60_000, selectionPolicy: "manual" },
+      },
+    ]);
+
+    expect(s.rotation).toBeNull();
+  });
+
+  test("late joiner is inserted fairly after those who haven't driven (REQ-025.2)", () => {
+    const s = reduce(baseRoundRobin(), [
+      { type: "participantJoined", id: "p1", name: "Ann", role: "observer" },
+      {
+        type: "configured",
+        by: "host-1",
+        config: {
+          mode: "fixed",
+          durationMs: 60_000,
+          selectionPolicy: "round-robin",
+        },
+      },
+    ]);
+
+    // Late joiner arrives after session configured.
+    const s2 = applyEvent(s, {
+      type: "participantJoined",
+      id: "p2",
+      name: "Bo",
+      role: "observer",
+    });
+
+    // p2 should be added to the rotation.
+    expect(s2.rotation?.order).toContain("p2");
+  });
+
+  test("participant removal skips in rotation and doesn't stall (REQ-011.3)", () => {
+    const s = reduce(baseRoundRobin(), [
+      { type: "participantJoined", id: "p1", name: "Ann", role: "observer" },
+      { type: "participantJoined", id: "p2", name: "Bo", role: "observer" },
+      {
+        type: "configured",
+        by: "host-1",
+        config: {
+          mode: "fixed",
+          durationMs: 60_000,
+          selectionPolicy: "round-robin",
+        },
+      },
+    ]);
+
+    expect(s.rotation?.order).toEqual(["host-1", "p1", "p2"]);
+
+    // p1 leaves; should be removed from rotation.
+    const s2 = applyEvent(s, { type: "participantLeft", id: "p1" });
+
+    expect(s2.rotation?.order).toEqual(["host-1", "p2"]);
+  });
+});

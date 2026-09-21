@@ -96,4 +96,32 @@ export interface SessionState {
    * When a turn is active, editTokenHolder should equal turn.driverId.
    */
   readonly currentTurn: Turn | null;
+  /**
+   * Round-robin rotation state (REQ-008, REQ-011, REQ-025).
+   * null when not using round-robin mode.
+   */
+  readonly rotation: RotationState | null;
+}
+
+/**
+ * Round-robin rotation state (REQ-011: fair rotation with late-comer insertion).
+ */
+export interface RotationState {
+  /**
+   * Eligible participants in rotation order (list, not map, to preserve order).
+   * Includes only eligible participants (observers + host-participant, not spectators).
+   * Deterministic order: insertion order of participants (REQ-011.1).
+   */
+  readonly order: readonly ParticipantId[];
+  /**
+   * Index into `order` pointing to the next driver to be selected (REQ-011.1).
+   * Advanced after each turn completes.
+   */
+  readonly nextIndex: number;
+  /**
+   * Participants who have driven in the current rotation cycle.
+   * Used to insert late joiners fairly: they go after those who haven't yet driven
+   * in this cycle (REQ-011.2, REQ-025.2).
+   */
+  readonly hasDrivenInCycle: ReadonlySet<ParticipantId>;
 }
