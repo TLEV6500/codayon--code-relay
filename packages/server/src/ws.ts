@@ -109,8 +109,9 @@ export function createWebSocketHandler(
         handleDocMessage(ws, room.code, registry, getServer(), msg);
       } else if (msg.channel === "presence") {
         handlePresenceMessage(ws, registry, msg);
+      } else if (msg.channel === "control") {
+        handleControlMessage(ws, room.code, registry, getServer(), msg);
       }
-      // control channel arrives in later tasks.
     },
 
     close(ws: ServerWebSocket<SocketData>) {
@@ -216,8 +217,8 @@ function handleDocMessage(
 /**
  * Relays a client's presence (cursor/selection) to the rest of the room
  * (REQ-018.1). The payload is enriched with the sender's participant id + name
- * so peers can label the remote cursor; `ws.publish` excludes the sender, so a
- * client never receives an echo of its own presence.
+ * so peers can label the remote cursor; additionally, the sender receives its
+ * own presence so it can render its own cursor/selection in the editor (UX fix).
  *
  * Presence is transient awareness data kept separate from the authoritative
  * document (REQ-018.3): it is only relayed, never stored.
@@ -241,7 +242,9 @@ function handlePresenceMessage(
     anchor: msg.anchor,
     head: msg.head,
   };
-  // Socket-level publish excludes the sender (REQ-018.1 "all OTHER users").
+  // Send to self so the user can see their own cursor/selection in the editor.
+  send(ws, relayed);
+  // Broadcast to other users (socket-level publish excludes sender by default).
   ws.publish(roomTopic(ws.data.code), JSON.stringify(relayed));
 }
 
@@ -256,4 +259,183 @@ function applyConnection(
     id,
     connected,
   });
+}
+
+/**
+ * Handles control channel messages (turn configuration, session control, driver selection).
+ * Verifies authorization and applies events to the session state machine.
+ */
+function handleControlMessage(
+  ws: ServerWebSocket<SocketData>,
+  code: string,
+  registry: RoomRegistry,
+  server: Server<SocketData> | undefined,
+  msg: Extract<ClientMessage, { channel: "control" }>,
+): void {
+  const room = registry.get(code);
+  if (!room) return;
+
+  const actor = ws.data.participantId;
+  const isHost = actor === room.session.hostId;
+
+  switch (msg.type) {
+    case "configure": {
+      // Only host can configure (REQ-005.1).
+      if (!isHost) {
+        send(ws, {
+          channel: "control",
+          type: "controlRejected",
+          reason: "not-host",
+        });
+        return;
+      }
+      room.session = applyEvent(room.session, {
+        type: "configured",
+        by: actor,
+        config: {
+          mode: msg.mode,
+          durationMs: msg.durationMs,
+          selectionPolicy: msg.selectionPolicy,
+        },
+      });
+      broadcastSessionState(room, server, code);
+      return;
+    }
+
+    case "startSession": {
+      // Only host can start (REQ-005.1).
+      if (!isHost) {
+        send(ws, {
+          channel: "control",
+          type: "controlRejected",
+          reason: "not-host",
+        });
+        return;
+      }
+      // Must be configured first (REQ-007.3).
+      if (room.session.turnConfig === null) {
+        send(ws, {
+          channel: "control",
+          type: "controlRejected",
+          reason: "not-configured",
+        });
+        return;
+      }
+      room.session = applyEvent(room.session, {
+        type: "sessionStarted",
+        by: actor,
+      });
+      broadcastSessionState(room, server, code);
+      return;
+    }
+
+    case "endSession": {
+      // Only host can end (REQ-005.1).
+      if (!isHost) {
+        send(ws, {
+          channel: "control",
+          type: "controlRejected",
+          reason: "not-host",
+        });
+        return;
+      }
+      room.session = applyEvent(room.session, {
+        type: "sessionEnded",
+        by: actor,
+      });
+      // Broadcast final state before cleanup.
+      broadcastSessionState(room, server, code);
+      // Clean up the room when session ends (REQ-004.1/2).
+      registry.endRoom(code);
+      return;
+    }
+
+    case "startTurn": {
+      // Only host can start a turn manually (REQ-005.1).
+      if (!isHost) {
+        send(ws, {
+          channel: "control",
+          type: "controlRejected",
+          reason: "not-host",
+        });
+        return;
+      }
+      // Session must be active and configured.
+      if (room.session.phase !== "active" || room.session.turnConfig === null) {
+        send(ws, {
+          channel: "control",
+          type: "controlRejected",
+          reason: "invalid-state",
+        });
+        return;
+      }
+      room.session = applyEvent(room.session, {
+        type: "turnStarted",
+        by: actor,
+        driver: msg.driver,
+        startedAt: Date.now(),
+      });
+      broadcastSessionState(room, server, code);
+      return;
+    }
+
+    case "earlyEnd": {
+      // Only the current driver can end early (REQ-010.3).
+      if (actor !== room.session.editTokenHolder) {
+        send(ws, {
+          channel: "control",
+          type: "controlRejected",
+          reason: "invalid-state",
+        });
+        return;
+      }
+      // Early-end only allowed in early-end mode (REQ-010.4).
+      if (room.session.turnConfig?.mode !== "fixed-early-end") {
+        send(ws, {
+          channel: "control",
+          type: "controlRejected",
+          reason: "invalid-state",
+        });
+        return;
+      }
+      room.session = applyEvent(room.session, {
+        type: "earlyEndRequested",
+        by: actor,
+      });
+      broadcastSessionState(room, server, code);
+      return;
+    }
+
+    default:
+      return;
+  }
+}
+
+/**
+ * Broadcast the current session state to all participants (used after config/state changes).
+ * Sends the SessionSnapshotMsg with current phase, config, and roster.
+ */
+function broadcastSessionState(
+  room: NonNullable<ReturnType<RoomRegistry["get"]>>,
+  server: Server<SocketData> | undefined,
+  code: string,
+): void {
+  if (!server) return;
+
+  const roster = [...room.session.participants.values()].map((p) => ({
+    id: p.id,
+    name: p.name,
+    role: p.role,
+    connected: p.connected,
+  }));
+
+  const msg: ServerMessage = {
+    channel: "control",
+    type: "sessionSnapshot",
+    phase: room.session.phase,
+    turnConfig: room.session.turnConfig,
+    roster,
+  };
+
+  server.publish(roomTopic(code), JSON.stringify(msg));
 }
