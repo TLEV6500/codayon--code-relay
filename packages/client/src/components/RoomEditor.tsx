@@ -12,6 +12,7 @@ import type {
   TimerTickMsg,
   DisconnectGraceStartedMsg,
   RoleAssignedMsg,
+  ControlRejectedMsg,
 } from "@codayon/shared";
 import { bootstrapRoom } from "../api";
 import { connectRelay, type RelayConnection } from "../collab/transport";
@@ -29,6 +30,23 @@ export interface RoomEditorProps {
   readonly clientToken: string;
   readonly clientID: string;
   readonly role: "host" | "observer" | "spectator";
+}
+
+/**
+ * Maps control rejection reasons to human-readable error messages.
+ * Used when a control action is rejected by the server.
+ */
+function getControlRejectionMessage(reason: "not-host" | "not-configured" | "invalid-state"): string {
+  switch (reason) {
+    case "not-host":
+      return "Only the host can do this";
+    case "not-configured":
+      return "Session not configured";
+    case "invalid-state":
+      return "Cannot do this now";
+    default:
+      return "Action not allowed";
+  }
 }
 
 /**
@@ -84,6 +102,10 @@ export const RoomEditor: Component<RoomEditorProps> = (props) => {
     readonly startedAt: number;
   }
   const [graceState, setGraceState] = createSignal<GraceState | null>(null);
+
+  // Control rejection feedback (REQ-036)
+  const [controlError, setControlError] = createSignal<string | null>(null);
+  let controlErrorTimeout: NodeJS.Timeout | undefined;
 
   onMount(async () => {
     const boot = await bootstrapRoom(props.code, props.clientToken);
@@ -146,6 +168,23 @@ export const RoomEditor: Component<RoomEditorProps> = (props) => {
         } else if (msg.type === "disconnectGraceResolved") {
           // Grace period resolved; clear the state (REQ-033, Task 7)
           setGraceState(null);
+        } else if (msg.type === "controlRejected") {
+          // Control action rejected; display human-readable feedback (REQ-036)
+          const rejectionMsg = msg as ControlRejectedMsg;
+          const errorText = getControlRejectionMessage(rejectionMsg.reason);
+          
+          // Clear any pending timeout
+          if (controlErrorTimeout) {
+            clearTimeout(controlErrorTimeout);
+          }
+          
+          // Set the error message
+          setControlError(errorText);
+          
+          // Auto-dismiss after 3 seconds (REQ-036.3)
+          controlErrorTimeout = setTimeout(() => {
+            setControlError(null);
+          }, 3000);
         }
       }
     });
@@ -225,6 +264,8 @@ export const RoomEditor: Component<RoomEditorProps> = (props) => {
               rotationOrder={rotationOrder()}
               rotationNextIndex={rotationNextIndex()}
               graceState={graceState()}
+              controlError={controlError()}
+              onControlErrorDismiss={() => setControlError(null)}
             />
           )}
         </div>

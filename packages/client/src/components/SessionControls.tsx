@@ -42,6 +42,8 @@ export interface SessionControlsProps {
     readonly gracePeriodMs: number;
     readonly startedAt: number;
   } | null;
+  readonly controlError?: string | null;
+  readonly onControlErrorDismiss?: () => void;
 }
 
 /**
@@ -126,8 +128,36 @@ const ConfigurationDialog: Component<{
 export const SessionControls: Component<SessionControlsProps> = (props) => {
   const [showConfig, setShowConfig] = createSignal(false);
   const [rosterOpen, setRosterOpen] = createSignal(false);
+  const [displayedControlError, setDisplayedControlError] = createSignal<string | null>(null);
+  let controlErrorTimeout: NodeJS.Timeout | undefined;
   const [gracePeriodRemainingMs, setGracePeriodRemainingMs] = createSignal<number>(0);
   const [hostDisconnected, setHostDisconnected] = createSignal(false);
+  
+  // Handle control error display and auto-dismiss (REQ-036)
+  createEffect(() => {
+    const error = props.controlError;
+    if (error) {
+      setDisplayedControlError(error);
+      
+      // Clear any pending timeout
+      if (controlErrorTimeout) {
+        clearTimeout(controlErrorTimeout);
+      }
+      
+      // Auto-dismiss after 3 seconds (REQ-036.3)
+      controlErrorTimeout = setTimeout(() => {
+        setDisplayedControlError(null);
+        props.onControlErrorDismiss?.();
+      }, 3000);
+    } else {
+      // Clear immediately if error is cleared externally
+      setDisplayedControlError(null);
+      if (controlErrorTimeout) {
+        clearTimeout(controlErrorTimeout);
+        controlErrorTimeout = undefined;
+      }
+    }
+  });
   
   // Smooth countdown interpolation (REQ-027)
   const [displayMs, setDisplayMs] = createSignal<number | null>(null);
@@ -308,6 +338,31 @@ export const SessionControls: Component<SessionControlsProps> = (props) => {
 
   return (
     <div class="flex flex-col gap-3">
+      {/* Control Rejection Feedback (REQ-036) */}
+      <Show when={displayedControlError()}>
+        <div class="border-l-4 border-red-500 bg-red-900/30 rounded-r-lg p-3 animate-in">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <div class="w-2 h-2 rounded-full bg-red-500" />
+              <span class="text-sm font-semibold text-red-300">{displayedControlError()}</span>
+            </div>
+            <button
+              onClick={() => {
+                setDisplayedControlError(null);
+                props.onControlErrorDismiss?.();
+                if (controlErrorTimeout) {
+                  clearTimeout(controlErrorTimeout);
+                  controlErrorTimeout = undefined;
+                }
+              }}
+              class="text-xs text-red-400 hover:text-red-300 font-semibold"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      </Show>
+
       {/* Host Disconnect Indicator (REQ-034, Task 8) */}
       <Show when={hostDisconnected()}>
         <div class="border-l-4 border-orange-500 bg-orange-900/30 rounded-r-lg p-3">
