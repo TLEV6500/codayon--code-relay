@@ -34,6 +34,33 @@ function fromWire(w: WireUpdate): Update {
 }
 
 /**
+ * Tracks the edit token holder state from the relay.
+ * Emits updates when the token holder changes.
+ * (Placeholder for Task 7+: currently token holder is not broadcast.)
+ */
+export class TokenState {
+  private listeners = new Set<(holder: string | null) => void>();
+
+  constructor(
+    _connection: RelayConnection,
+    _myParticipantId: string,
+  ) {
+    // Currently, token holder is not broadcast by the relay (that's Task 7+).
+    // For now, initialize as null. In future tasks, subscribe to token events.
+  }
+
+  /** Subscribe to token holder changes. */
+  onChange(listener: (holder: string | null) => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  destroy() {
+    this.listeners.clear();
+  }
+}
+
+/**
  * Builds the collab extension + a view plugin that syncs with the relay.
  *
  * @param startVersion authoritative version the seeded document corresponds to

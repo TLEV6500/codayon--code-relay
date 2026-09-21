@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import type { Server } from "bun";
 import { ChangeSet } from "@codemirror/state";
+import { applyEvent } from "@codayon/shared";
 import { createAppWithDeps } from "./app";
 import { createWebSocketHandler, tryUpgrade, type SocketData } from "./ws";
 import { RoomRegistry } from "./rooms";
@@ -13,6 +14,7 @@ let registry: RoomRegistry;
 
 beforeAll(() => {
   registry = new RoomRegistry();
+  (globalThis as any).__testRegistry = registry;
   const { app } = createAppWithDeps({ registry });
   let srv: Server<SocketData> | undefined;
   const websocket = createWebSocketHandler(registry, () => srv);
@@ -136,6 +138,110 @@ describe("WebSocket relay (REQ-016/017)", () => {
     );
     expect(boot.version).toBe(1);
     expect(boot.doc).toBe("hello");
+
+    host.close();
+    peer.close();
+  });
+
+  test("rejects spectator mutations (REQ-006.2, REQ-014)", async () => {
+    const room = await createRoom();
+    const specRes = await fetch(`${baseUrl}/api/rooms/${room.code}/join`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ role: "spectator", name: "Watcher" }),
+    }).then((r) => r.json() as Promise<{ clientToken: string }>);
+
+    const host = await connect(room.code, room.clientToken);
+    const spectator = await connect(room.code, specRes.clientToken);
+
+    // Spectator attempts to push an update.
+    const rejectionP = nextMessage(
+      spectator,
+      (m) => m.channel === "doc" && m.type === "pushRejected",
+    );
+    sendMsg(spectator, {
+      channel: "doc",
+      type: "pushUpdates",
+      version: 0,
+      updates: [insertUpdate("spectator-client", 0, "nope", 0)],
+    });
+
+    const rejection = (await rejectionP) as Extract<
+      ServerMessage,
+      { type: "pushRejected" }
+    >;
+    expect(rejection.reason).toBe("spectator");
+
+    // The document remains unchanged.
+    const boot = await fetch(`${baseUrl}/api/rooms/${room.code}/bootstrap`).then(
+      (r) => r.json() as Promise<{ version: number; doc: string }>,
+    );
+    expect(boot.version).toBe(0);
+    expect(boot.doc).toBe("");
+
+    host.close();
+    spectator.close();
+  });
+
+  test("when a token holder is set, rejects non-holders from pushing (REQ-012, REQ-013, REQ-014)", async () => {
+    const room = await createRoom();
+    const guest = await joinRoom(room.code);
+
+    const host = await connect(room.code, room.clientToken);
+    const peer = await connect(room.code, guest.clientToken);
+
+    // Get the registry and room state, then manually grant the token to the host.
+    // The registry is attached to the app context.
+    const registryForTest = (globalThis as any).__testRegistry as RoomRegistry | undefined;
+    const roomState = registryForTest?.get(room.code);
+    if (roomState) {
+      // Get the host ID from the current state
+      const hostId = roomState.session.hostId;
+      roomState.session = applyEvent(roomState.session, {
+        type: "tokenGranted",
+        to: hostId,
+      });
+    }
+
+    // Peer (guest) attempts to push; should be rejected.
+    const rejectionP = nextMessage(
+      peer,
+      (m) => m.channel === "doc" && m.type === "pushRejected",
+    );
+    sendMsg(peer, {
+      channel: "doc",
+      type: "pushUpdates",
+      version: 0,
+      updates: [insertUpdate("peer-client", 0, "mine", 0)],
+    });
+
+    const rejection = (await rejectionP) as Extract<
+      ServerMessage,
+      { type: "pushRejected" }
+    >;
+    expect(rejection.reason).toBe("not-token-holder");
+
+    // Host can push successfully.
+    const hostUpdateP = nextMessage(
+      peer,
+      (m) => m.channel === "doc" && m.type === "updates",
+    );
+    sendMsg(host, {
+      channel: "doc",
+      type: "pushUpdates",
+      version: 0,
+      updates: [insertUpdate("host-client", 0, "host-edit", 0)],
+    });
+
+    const update = (await hostUpdateP) as Extract<ServerMessage, { type: "updates" }>;
+    expect(update.updates.length).toBe(1);
+
+    // The document now contains the host's edit, not the peer's rejected attempt.
+    const boot = await fetch(`${baseUrl}/api/rooms/${room.code}/bootstrap`).then(
+      (r) => r.json() as Promise<{ version: number; doc: string }>,
+    );
+    expect(boot.version).toBe(1);
+    expect(boot.doc).toBe("host-edit");
 
     host.close();
     peer.close();

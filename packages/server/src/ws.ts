@@ -14,15 +14,15 @@
  *  - `getDocument`  -> `document` (version + text) for a (re)joining peer
  *  - `pullUpdates`  -> `updates` accepted since the peer's version
  *  - `pushUpdates`  -> apply to the authority, then broadcast accepted `updates`
- *                      to the whole room via pub/sub
+ *                      to the whole room via pub/sub (token + spectator
+ *                      enforcement at REQ-012/013/014)
  *
  * Presence channel (transient awareness, REQ-018):
  *  - `presence`     -> enrich with participant id + name and relay to the rest
  *                      of the room (sender excluded) as `presence`
  *  - on disconnect  -> broadcast `presenceGone` so peers purge the indicator
  *
- * Token/role enforcement on pushes is deferred to Task 6; for now any connected
- * participant may push.
+ * Token/role enforcement: rejects non-token-holders and spectators (Task 6).
  */
 
 import type { Server, ServerWebSocket } from "bun";
@@ -162,6 +162,30 @@ function handleDocMessage(
     }
 
     case "pushUpdates": {
+      // Also reject spectators (REQ-006.2, REQ-014): they can never push.
+      const participant = room.session.participants.get(ws.data.participantId);
+      if (participant?.role === "spectator") {
+        send(ws, {
+          channel: "doc",
+          type: "pushRejected",
+          reason: "spectator",
+        });
+        return;
+      }
+
+      // REQ-012, REQ-013/014: Only the token holder can push (NFR-005.1).
+      // Token enforcement only applies when a turn is active (editTokenHolder is set).
+      if (room.session.editTokenHolder !== null) {
+        if (room.session.editTokenHolder !== ws.data.participantId) {
+          send(ws, {
+            channel: "doc",
+            type: "pushRejected",
+            reason: "not-token-holder",
+          });
+          return;
+        }
+      }
+
       const accepted = room.doc.pushUpdates(msg.version, msg.updates);
       if (accepted === null) {
         send(ws, {

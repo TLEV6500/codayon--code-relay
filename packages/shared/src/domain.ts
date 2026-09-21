@@ -70,4 +70,10 @@ export interface SessionState {
   readonly turnConfig: TurnConfig | null;
   /** Participants keyed by id, insertion order preserved for fair rotation. */
   readonly participants: ReadonlyMap<ParticipantId, Participant>;
+  /**
+   * The participant currently holding the edit token (REQ-012.1/2).
+   * null when no turn is active. At most one holder at any time (REQ-012.1).
+   * Never granted to a spectator (REQ-012.2, REQ-006.2).
+   */
+  readonly editTokenHolder: ParticipantId | null;
 }

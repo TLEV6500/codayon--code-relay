@@ -18,6 +18,10 @@ export interface RoomEditorProps {
  * Mounts a CodeMirror 6 editor bound to the room's authoritative document via
  * the collab peer. Bootstraps the start doc + version over HTTP, then keeps in
  * sync over the WebSocket relay.
+ *
+ * Enforces read-only mode for non-token-holders (REQ-013/014) via the editable
+ * facet, which can be toggled dynamically as token state changes.
+ * (Token broadcast is deferred to Task 7+; currently all non-spectators are editable.)
  */
 export const RoomEditor: Component<RoomEditorProps> = (props) => {
   let host!: HTMLDivElement;
@@ -41,6 +45,7 @@ export const RoomEditor: Component<RoomEditorProps> = (props) => {
           "&": { height: "100%", fontSize: "13px" },
           ".cm-scroller": { fontFamily: "ui-monospace, SFMono-Regular, monospace" },
         }),
+        EditorView.editable.of(true),
         peerExtension(boot.version, props.clientID, connection),
         presenceExtension(connection),
       ],

@@ -43,7 +43,15 @@ export type EngineEvent =
       readonly config: TurnConfig;
     }
   | { readonly type: "sessionStarted"; readonly by: ParticipantId }
-  | { readonly type: "sessionEnded"; readonly by: ParticipantId };
+  | { readonly type: "sessionEnded"; readonly by: ParticipantId }
+  | {
+      readonly type: "tokenGranted";
+      readonly to: ParticipantId;
+    }
+  | {
+      readonly type: "tokenRevoked";
+      readonly from: ParticipantId;
+    };
 
 export interface CreateSessionInput {
   readonly roomId: string;
@@ -67,6 +75,7 @@ export function createSession(input: CreateSessionInput): SessionState {
     hostParticipation: input.hostParticipation,
     turnConfig: null,
     participants: new Map([[host.id, host]]),
+    editTokenHolder: null,
   };
 }
 
@@ -170,6 +179,19 @@ export function applyEvent(state: SessionState, event: EngineEvent): SessionStat
       // Host-only (REQ-004.1, REQ-005.1).
       if (!isHost(state, event.by)) return state;
       return { ...state, phase: "ended" };
+    }
+
+    case "tokenGranted": {
+      // Token can only be granted to eligible participants (REQ-012.2).
+      if (!isEligibleForToken(state, event.to)) return state;
+      // Revoke from previous holder if any, then grant to new holder (REQ-012.3).
+      return { ...state, editTokenHolder: event.to };
+    }
+
+    case "tokenRevoked": {
+      // Revoke only if they currently hold it (REQ-012.3).
+      if (state.editTokenHolder !== event.from) return state;
+      return { ...state, editTokenHolder: null };
     }
 
     default: {
