@@ -8,6 +8,7 @@ import type {
   TurnStartedMsg,
   ServerMessage,
   TurnConfig,
+  TimerTickMsg,
 } from "@codayon/shared";
 import { bootstrapRoom } from "../api";
 import { connectRelay, type RelayConnection } from "../collab/transport";
@@ -62,6 +63,9 @@ export const RoomEditor: Component<RoomEditorProps> = (props) => {
     }[]
   >([]);
 
+  // Turn timer tracking (REQ-027)
+  const [remainingMs, setRemainingMs] = createSignal<number | null>(null);
+
   onMount(async () => {
     const boot = await bootstrapRoom(props.code);
     connection = await connectRelay({
@@ -84,8 +88,14 @@ export const RoomEditor: Component<RoomEditorProps> = (props) => {
         } else if (msg.type === "turnStarted") {
           const turn = msg as TurnStartedMsg;
           setCurrentDriver(turn.driver);
+          setRemainingMs(null); // Reset on new turn
         } else if (msg.type === "turnEnded") {
           setCurrentDriver(null);
+          setRemainingMs(null); // Clear timer when turn ends
+        } else if (msg.type === "timerTick") {
+          // Update remaining time for interpolation in SessionControls
+          const tick = msg as TimerTickMsg;
+          setRemainingMs(tick.remainingMs);
         }
       }
     });
@@ -158,6 +168,7 @@ export const RoomEditor: Component<RoomEditorProps> = (props) => {
               turnConfig={turnConfig()}
               isCurrentDriver={currentDriver() === props.clientID}
               roster={roster()}
+              remainingMs={remainingMs()}
             />
           )}
         </div>

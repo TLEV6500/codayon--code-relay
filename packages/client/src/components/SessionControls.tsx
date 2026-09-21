@@ -6,7 +6,7 @@
  * - All users: display current session state (phase, turn config, turn timer, roster status)
  */
 
-import { createSignal, Show, type Component } from "solid-js";
+import { createSignal, createEffect, Show, type Component } from "solid-js";
 import type {
   TurnConfig,
   TurnMode,
@@ -28,6 +28,7 @@ export interface SessionControlsProps {
     readonly role: string;
     readonly connected: boolean;
   }[];
+  readonly remainingMs?: number | null;
 }
 
 /**
@@ -112,6 +113,59 @@ const ConfigurationDialog: Component<{
 export const SessionControls: Component<SessionControlsProps> = (props) => {
   const [showConfig, setShowConfig] = createSignal(false);
   const [rosterOpen, setRosterOpen] = createSignal(false);
+  
+  // Smooth countdown interpolation (REQ-027)
+  const [displayMs, setDisplayMs] = createSignal<number | null>(null);
+  let lastTickMs = 0;
+  let lastTickTime = 0;
+  let animationFrameId = 0;
+  
+  // Track server tick updates and interpolate between them
+  createEffect(() => {
+    const ms = props.remainingMs;
+    if (ms !== null && ms !== undefined) {
+      lastTickMs = ms;
+      lastTickTime = Date.now();
+      setDisplayMs(ms);
+      
+      // Start animation frame loop for smooth interpolation
+      const animate = () => {
+        const elapsed = Date.now() - lastTickTime;
+        const interpolated = Math.max(0, lastTickMs - elapsed);
+        setDisplayMs(interpolated);
+        
+        if (interpolated > 0) {
+          animationFrameId = requestAnimationFrame(animate);
+        } else {
+          setDisplayMs(0);
+        }
+      };
+      
+      // Clear any existing animation frame
+      if (animationFrameId) cancelAnimationFrame(animationFrameId);
+      
+      // Only start animation if we have remaining time
+      if (ms > 0) {
+        animationFrameId = requestAnimationFrame(animate);
+      }
+    } else {
+      // Clear timer display when no active turn
+      setDisplayMs(null);
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+        animationFrameId = 0;
+      }
+    }
+  });
+  
+  // Format milliseconds to MM:SS
+  const formatCountdown = (ms: number | null): string => {
+    if (ms === null || ms === undefined) return "--:--";
+    const totalSeconds = Math.ceil(ms / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+  };
 
   const handleConfigure = (config: TurnConfig) => {
     // First send configure message
@@ -205,6 +259,21 @@ export const SessionControls: Component<SessionControlsProps> = (props) => {
           <div>
             <span class="text-slate-500">Phase:</span> {props.sessionPhase || "unknown"}
           </div>
+          
+          {/* Turn countdown timer */}
+          <Show when={displayMs() !== null}>
+            <div class="flex items-center gap-2 px-2 py-1 bg-slate-800/50 rounded">
+              <span class="text-slate-500">Timer:</span>
+              <span class={`font-mono font-semibold ${
+                displayMs()! > 10000 ? "text-emerald-400" :
+                displayMs()! > 5000 ? "text-amber-400" :
+                "text-red-400"
+              }`}>
+                {formatCountdown(displayMs())}
+              </span>
+            </div>
+          </Show>
+          
           <Show when={props.turnConfig}>
             {(config) => (
               <>
