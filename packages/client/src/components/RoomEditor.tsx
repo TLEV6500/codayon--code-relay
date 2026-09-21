@@ -3,6 +3,12 @@ import { EditorState } from "@codemirror/state";
 import { EditorView, keymap, lineNumbers } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { Compartment } from "@codemirror/state";
+import type {
+  SessionSnapshotMsg,
+  TurnStartedMsg,
+  ServerMessage,
+  TurnConfig,
+} from "@codayon/shared";
 import { bootstrapRoom } from "../api";
 import { connectRelay, type RelayConnection } from "../collab/transport";
 import { peerExtension } from "../collab/peer";
@@ -12,23 +18,27 @@ import {
   getAllLanguages,
   type LanguageName,
 } from "../collab/languages";
+import { SessionControls } from "./SessionControls";
 
 export interface RoomEditorProps {
   readonly code: string;
   readonly clientToken: string;
-  /** Stable per-connection collab client id. */
   readonly clientID: string;
+  readonly role: "host" | "observer" | "spectator";
 }
 
 /**
  * Mounts a CodeMirror 6 editor bound to the room's authoritative document via
  * the collab peer. Bootstraps the start doc + version over HTTP, then keeps in
- * sync over the WebSocket relay.
+ * sync over the WebSocket relay. Also displays session controls (for hosts and drivers)
+ * and roster information.
  *
  * Features:
  * - Syntax highlighting for TypeScript, JavaScript, Python, SQL, JSON, YAML,
  *   HTML, CSS, Bash, PowerShell, TOML (REQ-019, NFR-004)
  * - Language selector dropdown
+ * - Session controls for host (configure, start, end) and driver (early end turn)
+ * - Roster display with participant status
  * - Read-only mode for non-token-holders (REQ-013/014)
  * - Mobile-responsive canvas (NFR-003)
  */
@@ -39,11 +49,45 @@ export const RoomEditor: Component<RoomEditorProps> = (props) => {
   const [language, setLanguage] = createSignal<LanguageName>("typescript");
   let languageCompartment: Compartment;
 
+  // Session state tracking
+  const [sessionPhase, setSessionPhase] = createSignal<"created" | "active" | "ended">("created");
+  const [turnConfig, setTurnConfig] = createSignal<TurnConfig | null>(null);
+  const [currentDriver, setCurrentDriver] = createSignal<string | null>(null);
+  const [roster, setRoster] = createSignal<
+    readonly {
+      readonly id: string;
+      readonly name: string;
+      readonly role: string;
+      readonly connected: boolean;
+    }[]
+  >([]);
+
   onMount(async () => {
     const boot = await bootstrapRoom(props.code);
     connection = await connectRelay({
       code: props.code,
       clientToken: props.clientToken,
+    });
+
+    // Set initial session state from bootstrap
+    setSessionPhase(boot.phase);
+    setRoster(boot.roster);
+
+    // Subscribe to session/turn updates
+    connection.onMessage((msg: ServerMessage) => {
+      if (msg.channel === "control") {
+        if (msg.type === "sessionSnapshot") {
+          const snapshot = msg as SessionSnapshotMsg;
+          setSessionPhase(snapshot.phase);
+          setTurnConfig(snapshot.turnConfig);
+          setRoster(snapshot.roster);
+        } else if (msg.type === "turnStarted") {
+          const turn = msg as TurnStartedMsg;
+          setCurrentDriver(turn.driver);
+        } else if (msg.type === "turnEnded") {
+          setCurrentDriver(null);
+        }
+      }
     });
 
     languageCompartment = new Compartment();
@@ -83,28 +127,46 @@ export const RoomEditor: Component<RoomEditorProps> = (props) => {
   });
 
   return (
-    <div class="flex flex-col h-full w-full gap-2 p-2 bg-slate-900">
-      {/* Language selector (REQ-019, NFR-004) */}
-      <div class="flex gap-2 items-center">
-        <label for="language-select" class="text-sm text-slate-300">
-          Language:
-        </label>
-        <select
-          id="language-select"
-          value={language()}
-          onChange={(e) => changeLanguage(e.target.value as LanguageName)}
-          class="px-2 py-1 rounded text-sm bg-slate-800 text-slate-100 border border-slate-600 hover:border-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-        >
-          {getAllLanguages().map((info) => (
-            <option value={info.name}>{info.displayName}</option>
-          ))}
-        </select>
+    <div class="flex flex-col h-full w-full gap-2 bg-slate-900">
+      {/* Top control panel: language selector + session controls */}
+      <div class="flex gap-2 p-2 flex-wrap">
+        <div class="flex gap-2 items-center">
+          <label for="language-select" class="text-sm text-slate-300">
+            Language:
+          </label>
+          <select
+            id="language-select"
+            value={language()}
+            onChange={(e) => changeLanguage(e.target.value as LanguageName)}
+            class="px-2 py-1 rounded text-sm bg-slate-800 text-slate-100 border border-slate-600 hover:border-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          >
+            {getAllLanguages().map((info) => (
+              <option value={info.name}>{info.displayName}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Session controls (right side) */}
+        <div class="ml-auto">
+          {connection && (
+            <SessionControls
+              code={props.code}
+              role={props.role}
+              clientID={props.clientID}
+              connection={connection}
+              sessionPhase={sessionPhase()}
+              turnConfig={turnConfig()}
+              isCurrentDriver={currentDriver() === props.clientID}
+              roster={roster()}
+            />
+          )}
+        </div>
       </div>
 
       {/* Editor canvas (NFR-003: responsive) */}
       <div
         ref={host}
-        class="flex-1 overflow-hidden rounded-lg border border-slate-800"
+        class="flex-1 overflow-hidden rounded-lg border border-slate-800 m-2 mt-0"
       />
     </div>
   );
