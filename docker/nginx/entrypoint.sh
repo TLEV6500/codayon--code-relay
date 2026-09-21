@@ -1,15 +1,22 @@
 #!/bin/sh
 # Selects docker/nginx/root.dev.conf or root.prod.conf as the active `location /`
-# block based on NGINX_PROFILE, and substitutes the upstream server hostname in
-# nginx.conf (from "server" to "server-prod" or vice versa based on profile).
+# block based on NGINX_PROFILE environment variable.
+#
+# Dev profile serves requests to "/" via the Vite dev server (on the 'client' service).
+# Prod profile serves requests to "/" via static files from the nginx image.
+# Both profiles proxy "/api" and "/ws" to the 'server' (dev) or 'server-prod' (prod) service.
+#
+# Upstream hostname resolution is handled by the resolver directive in nginx.conf,
+# which dynamically resolves service names on the docker network at request time.
 
 set -eu
 
 profile="${NGINX_PROFILE:-prod}"
-upstream_host="${UPSTREAM_HOST:-server}"
 
-# Substitute the upstream hostname in nginx.conf for all proxy_pass directives.
-sed -i "s|http://server:3000|http://$upstream_host:3000|g" /etc/nginx/nginx.conf
+# Note: No runtime substitution needed. Nginx resolves service hostnames
+# at request time based on the docker network (see nginx.conf resolver directive).
+# Dev profile defines 'server' service, prod profile defines 'server-prod' service.
+# Both are on the 'codayon' docker network, so nginx can reach either at runtime.
 
 case "$profile" in
   dev)
