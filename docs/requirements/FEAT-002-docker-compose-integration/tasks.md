@@ -75,7 +75,7 @@ orphaned code.
     `if (msg.channel === "doc")` dispatch — a test-script defect, not an
     application or proxy defect; corrected and re-verified.)
 
-- [ ] **Task 5 — `.env.example` and environment variable wiring**
+- [x] **Task 5 — `.env.example` and environment variable wiring**
   - Extract nginx's published port, server `PORT`, and client dev port into
     Compose-level environment variables with defaults; add `.env.example`;
     confirm `.env` overrides are picked up on restart.
@@ -87,11 +87,16 @@ orphaned code.
     `bun run src/index.ts`.
   - **Requirements:** REQ-007; NFR-003.
 
-- [ ] **Task 7 — Client Dockerfile: production build + static output**
-  - Add a `build` stage running `vite build` with `ARG VITE_API_URL=""` /
-    `ENV VITE_API_URL` passthrough, and a `prod` stage (`FROM scratch`)
-    exposing only the built `dist/` for `COPY --from=` consumption.
+- [x] **Task 7 — Client Dockerfile: production build + static output**
+  - Multi-stage: `build` stage installs deps, accepts `ARG VITE_API_URL=""`,
+    runs `bun run build`; `prod` stage (`FROM scratch`) exposes only the built
+    `dist/` for consumption via `COPY --from=` in the nginx Dockerfile.
   - **Requirements:** REQ-008.1, REQ-008.3.
+  - **Verified:** `docker build -f docker/client/Dockerfile --target build .`
+    succeeds; Vite build output shows `dist/index.html` + `dist/assets/` with
+    minified JavaScript and CSS. `prod` stage is a `FROM scratch` image
+    exposing `/dist/` for multi-stage `COPY --from=` reference. Build-arg
+    `VITE_API_URL` is accepted (default empty, no-op).
 
 - [ ] **Task 8 — docker-compose prod profile wiring: dedicated nginx image + prod stack**
   - `docker/nginx/Dockerfile`: multi-stage, `COPY --from=` the client's build
