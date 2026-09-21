@@ -50,7 +50,7 @@ EXPOSE 3000
 CMD ["bun", "run", "--hot", "src/index.ts"]
 
 # ---------------------------------------------------------------------------
-# prod: minimal, non-root runtime image containing only what's needed to run
+# prod: minimal, non-dev runtime image containing only what's needed to run
 # the server. No dev deps, no bind mounts expected — fully self-contained so
 # it can be deployed standalone (e.g. as its own Railway service).
 # ---------------------------------------------------------------------------
@@ -66,11 +66,6 @@ RUN bun install --frozen-lockfile --production
 COPY packages/shared packages/shared
 COPY packages/server packages/server
 
-RUN addgroup --system --gid 1001 codayon \
-  && adduser --system --uid 1001 --ingroup codayon codayon \
-  && chown -R codayon:codayon /app
-
-USER codayon
 WORKDIR /app/packages/server
 ENV NODE_ENV=production
 EXPOSE 3000
