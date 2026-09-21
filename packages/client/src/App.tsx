@@ -87,6 +87,7 @@ export const App: Component = () => {
                 code={s().code}
                 clientToken={s().clientToken}
                 clientID={s().clientID}
+                role={s().role}
               />
             </main>
           </div>

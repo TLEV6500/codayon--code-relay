@@ -249,34 +249,35 @@ describe("WebSocket relay (REQ-016/017)", () => {
 });
 
 describe("presence channel (REQ-018)", () => {
-  test("relays a peer's presence to others (enriched) but not the sender", async () => {
+  test("relays a peer's presence to others (enriched) and to the sender so they see their own cursor", async () => {
     const room = await createRoom();
     const guest = await joinRoom(room.code);
     const host = await connect(room.code, room.clientToken);
     const peer = await connect(room.code, guest.clientToken);
 
+    // Both host and peer should receive the presence message.
+    const hostGotP = nextMessage(
+      host,
+      (m) => m.channel === "presence" && m.type === "presence",
+    );
     const peerGotP = nextMessage(
       peer,
       (m) => m.channel === "presence" && m.type === "presence",
     );
-    // The host should NOT receive an echo of its own presence.
-    let hostEcho = false;
-    host.addEventListener("message", (ev) => {
-      const m = JSON.parse(String(ev.data)) as ServerMessage;
-      if (m.channel === "presence" && m.type === "presence") hostEcho = true;
-    });
 
     sendMsg(host, { channel: "presence", type: "presence", anchor: 2, head: 5 });
 
-    const relayed = (await peerGotP) as Extract<ServerMessage, { type: "presence" }>;
-    expect(relayed.anchor).toBe(2);
-    expect(relayed.head).toBe(5);
-    expect(relayed.name).toBe("Host");
-    expect(relayed.participantId).toBeTruthy();
+    const hostRelayed = (await hostGotP) as Extract<ServerMessage, { type: "presence" }>;
+    expect(hostRelayed.anchor).toBe(2);
+    expect(hostRelayed.head).toBe(5);
+    expect(hostRelayed.name).toBe("Host");
+    expect(hostRelayed.participantId).toBeTruthy();
 
-    // Give any (erroneous) echo a moment to arrive.
-    await new Promise((r) => setTimeout(r, 30));
-    expect(hostEcho).toBe(false);
+    const peerRelayed = (await peerGotP) as Extract<ServerMessage, { type: "presence" }>;
+    expect(peerRelayed.anchor).toBe(2);
+    expect(peerRelayed.head).toBe(5);
+    expect(peerRelayed.name).toBe("Host");
+    expect(peerRelayed.participantId).toBe(hostRelayed.participantId);
 
     host.close();
     peer.close();
