@@ -54,6 +54,8 @@ export const RoomEditor: Component<RoomEditorProps> = (props) => {
   const [sessionPhase, setSessionPhase] = createSignal<"created" | "active" | "ended">("created");
   const [turnConfig, setTurnConfig] = createSignal<TurnConfig | null>(null);
   const [currentDriver, setCurrentDriver] = createSignal<string | null>(null);
+  const [currentDriverName, setCurrentDriverName] = createSignal<string | null>(null);
+  const [turnNumber, setTurnNumber] = createSignal<number | null>(null);
   const [roster, setRoster] = createSignal<
     readonly {
       readonly id: string;
@@ -88,9 +90,13 @@ export const RoomEditor: Component<RoomEditorProps> = (props) => {
         } else if (msg.type === "turnStarted") {
           const turn = msg as TurnStartedMsg;
           setCurrentDriver(turn.driver);
+          setCurrentDriverName(turn.driverName);
+          setTurnNumber(turn.turnNumber);
           setRemainingMs(null); // Reset on new turn
         } else if (msg.type === "turnEnded") {
           setCurrentDriver(null);
+          setCurrentDriverName(null);
+          setTurnNumber(null);
           setRemainingMs(null); // Clear timer when turn ends
         } else if (msg.type === "timerTick") {
           // Update remaining time for interpolation in SessionControls
@@ -167,6 +173,9 @@ export const RoomEditor: Component<RoomEditorProps> = (props) => {
               sessionPhase={sessionPhase()}
               turnConfig={turnConfig()}
               isCurrentDriver={currentDriver() === props.clientID}
+              currentDriver={currentDriver()}
+              currentDriverName={currentDriverName()}
+              turnNumber={turnNumber()}
               roster={roster()}
               remainingMs={remainingMs()}
             />

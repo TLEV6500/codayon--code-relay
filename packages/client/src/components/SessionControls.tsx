@@ -22,6 +22,9 @@ export interface SessionControlsProps {
   readonly sessionPhase?: "created" | "active" | "ended";
   readonly turnConfig?: TurnConfig | null;
   readonly isCurrentDriver?: boolean;
+  readonly currentDriver?: string | null;
+  readonly currentDriverName?: string | null;
+  readonly turnNumber?: number | null;
   readonly roster?: readonly {
     readonly id: string;
     readonly name: string;
@@ -259,6 +262,18 @@ export const SessionControls: Component<SessionControlsProps> = (props) => {
           <div>
             <span class="text-slate-500">Phase:</span> {props.sessionPhase || "unknown"}
           </div>
+          
+          {/* Current driver and turn number */}
+          <Show when={props.turnNumber !== null && props.turnNumber !== undefined}>
+            <div class="flex items-center gap-2 px-2 py-1 bg-slate-800/50 rounded">
+              <span class="text-slate-500">Turn:</span>
+              <span class="font-semibold text-blue-400">#{props.turnNumber}</span>
+              <span class="text-slate-600">•</span>
+              <span class={props.isCurrentDriver ? "font-semibold text-emerald-400" : "text-slate-300"}>
+                {props.isCurrentDriver ? "You are driving" : props.currentDriverName || "—"}
+              </span>
+            </div>
+          </Show>
           
           {/* Turn countdown timer */}
           <Show when={displayMs() !== null}>
