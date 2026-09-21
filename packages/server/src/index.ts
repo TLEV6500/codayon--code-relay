@@ -1,5 +1,5 @@
 import type { ServerWebSocket } from "bun";
-import { createApp } from "./app";
+import { createAppWithDeps } from "./app";
 
 /**
  * Server entrypoint.
@@ -10,9 +10,10 @@ import { createApp } from "./app";
  * instance for efficient room broadcast. The relay is NOT routed through Hono's
  * `upgradeWebSocket` helper.
  *
- * The websocket handler is a placeholder here; the relay lands in Task 4.
+ * The websocket handler is a placeholder here; the relay lands in Task 4 and
+ * will share the same `registry`.
  */
-const app = createApp();
+const { app } = createAppWithDeps();
 const port = Number(process.env.PORT ?? 3000);
 
 const server = Bun.serve({
