@@ -141,3 +141,79 @@ describe("WebSocket relay (REQ-016/017)", () => {
     peer.close();
   });
 });
+
+describe("presence channel (REQ-018)", () => {
+  test("relays a peer's presence to others (enriched) but not the sender", async () => {
+    const room = await createRoom();
+    const guest = await joinRoom(room.code);
+    const host = await connect(room.code, room.clientToken);
+    const peer = await connect(room.code, guest.clientToken);
+
+    const peerGotP = nextMessage(
+      peer,
+      (m) => m.channel === "presence" && m.type === "presence",
+    );
+    // The host should NOT receive an echo of its own presence.
+    let hostEcho = false;
+    host.addEventListener("message", (ev) => {
+      const m = JSON.parse(String(ev.data)) as ServerMessage;
+      if (m.channel === "presence" && m.type === "presence") hostEcho = true;
+    });
+
+    sendMsg(host, { channel: "presence", type: "presence", anchor: 2, head: 5 });
+
+    const relayed = (await peerGotP) as Extract<ServerMessage, { type: "presence" }>;
+    expect(relayed.anchor).toBe(2);
+    expect(relayed.head).toBe(5);
+    expect(relayed.name).toBe("Host");
+    expect(relayed.participantId).toBeTruthy();
+
+    // Give any (erroneous) echo a moment to arrive.
+    await new Promise((r) => setTimeout(r, 30));
+    expect(hostEcho).toBe(false);
+
+    host.close();
+    peer.close();
+  });
+
+  test("presence is shown to spectators too (REQ-018.2)", async () => {
+    const room = await createRoom();
+    const specRes = await fetch(`${baseUrl}/api/rooms/${room.code}/join`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ role: "spectator", name: "Watcher" }),
+    }).then((r) => r.json() as Promise<{ clientToken: string }>);
+
+    const host = await connect(room.code, room.clientToken);
+    const spectator = await connect(room.code, specRes.clientToken);
+
+    const specGotP = nextMessage(
+      spectator,
+      (m) => m.channel === "presence" && m.type === "presence",
+    );
+    sendMsg(host, { channel: "presence", type: "presence", anchor: 0, head: 1 });
+    const relayed = (await specGotP) as Extract<ServerMessage, { type: "presence" }>;
+    expect(relayed.head).toBe(1);
+
+    host.close();
+    spectator.close();
+  });
+
+  test("broadcasts presenceGone when a peer disconnects (REQ-018.4)", async () => {
+    const room = await createRoom();
+    const guest = await joinRoom(room.code);
+    const host = await connect(room.code, room.clientToken);
+    const peer = await connect(room.code, guest.clientToken);
+
+    const goneP = nextMessage(
+      peer,
+      (m) => m.channel === "presence" && m.type === "presenceGone",
+    );
+    // Host disconnects; the peer should be told to purge host's presence.
+    host.close();
+    const gone = (await goneP) as Extract<ServerMessage, { type: "presenceGone" }>;
+    expect(gone.participantId).toBeTruthy();
+
+    peer.close();
+  });
+});

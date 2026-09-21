@@ -52,14 +52,18 @@ ending by wiring into the running app. No orphaned code.
     entrypoint e2e (create → join → push → peer broadcast → converge to
     "hello world" @ v1).
 
-- [ ] **Task 5 — Presence channel (cursors/selections)**
+- [x] **Task 5 — Presence channel (cursors/selections)**
   - Broadcast cursor/selection as transient presence on a separate channel;
     render remote cursors/selections in CM6; remove on disconnect; shown to
     spectators too. Anchor via logical positions mapped through changes
     (foundation for REQ-015).
   - **Requirements:** REQ-018.
-  - **Demo:** moving the cursor/selecting in one tab shows a labeled remote
-    cursor in the others, including a spectator tab.
+  - **Verified:** `bun test` 47/47 pass — server: presence relayed to others
+    enriched with id+name, sender excluded, shown to spectators (REQ-018.2),
+    `presenceGone` on disconnect (REQ-018.4); client: presence state field maps
+    anchors through edits (no drift on earlier insert, stable on later insert),
+    upsert-by-id + remove. Typecheck clean; client builds; live entrypoint e2e
+    (host presence → spectator relay + presenceGone on disconnect).
 
 - [ ] **Task 6 — Edit token & server-side read-only enforcement**
   - Edit token in session state (exactly one holder); server rejects

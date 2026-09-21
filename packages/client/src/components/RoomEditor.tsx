@@ -5,6 +5,7 @@ import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { bootstrapRoom } from "../api";
 import { connectRelay, type RelayConnection } from "../collab/transport";
 import { peerExtension } from "../collab/peer";
+import { presenceExtension } from "../collab/presence";
 
 export interface RoomEditorProps {
   readonly code: string;
@@ -41,6 +42,7 @@ export const RoomEditor: Component<RoomEditorProps> = (props) => {
           ".cm-scroller": { fontFamily: "ui-monospace, SFMono-Regular, monospace" },
         }),
         peerExtension(boot.version, props.clientID, connection),
+        presenceExtension(connection),
       ],
     });
 

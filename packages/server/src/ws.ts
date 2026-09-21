@@ -10,11 +10,16 @@
  * authenticated by resolving `clientToken` to a participant in the room; an
  * unknown room or token is refused before the socket opens.
  *
- * Doc channel this task:
+ * Doc channel:
  *  - `getDocument`  -> `document` (version + text) for a (re)joining peer
  *  - `pullUpdates`  -> `updates` accepted since the peer's version
  *  - `pushUpdates`  -> apply to the authority, then broadcast accepted `updates`
  *                      to the whole room via pub/sub
+ *
+ * Presence channel (transient awareness, REQ-018):
+ *  - `presence`     -> enrich with participant id + name and relay to the rest
+ *                      of the room (sender excluded) as `presence`
+ *  - on disconnect  -> broadcast `presenceGone` so peers purge the indicator
  *
  * Token/role enforcement on pushes is deferred to Task 6; for now any connected
  * participant may push.
@@ -102,11 +107,21 @@ export function createWebSocketHandler(
 
       if (msg.channel === "doc") {
         handleDocMessage(ws, room.code, registry, getServer(), msg);
+      } else if (msg.channel === "presence") {
+        handlePresenceMessage(ws, registry, msg);
       }
-      // presence + control channels arrive in later tasks.
+      // control channel arrives in later tasks.
     },
 
     close(ws: ServerWebSocket<SocketData>) {
+      // Purge this user's presence for everyone else (REQ-018.4). Publish before
+      // unsubscribing so the socket is still a member of the topic.
+      const gone: ServerMessage = {
+        channel: "presence",
+        type: "presenceGone",
+        participantId: ws.data.participantId,
+      };
+      ws.publish(roomTopic(ws.data.code), JSON.stringify(gone));
       ws.unsubscribe(roomTopic(ws.data.code));
       const room = registry.get(ws.data.code);
       if (room) {
@@ -172,6 +187,38 @@ function handleDocMessage(
     default:
       return;
   }
+}
+
+/**
+ * Relays a client's presence (cursor/selection) to the rest of the room
+ * (REQ-018.1). The payload is enriched with the sender's participant id + name
+ * so peers can label the remote cursor; `ws.publish` excludes the sender, so a
+ * client never receives an echo of its own presence.
+ *
+ * Presence is transient awareness data kept separate from the authoritative
+ * document (REQ-018.3): it is only relayed, never stored.
+ */
+function handlePresenceMessage(
+  ws: ServerWebSocket<SocketData>,
+  registry: RoomRegistry,
+  msg: Extract<ClientMessage, { channel: "presence" }>,
+): void {
+  const room = registry.get(ws.data.code);
+  if (!room) return;
+
+  const participant = room.session.participants.get(ws.data.participantId);
+  const name = participant?.name ?? "Guest";
+
+  const relayed: ServerMessage = {
+    channel: "presence",
+    type: "presence",
+    participantId: ws.data.participantId,
+    name,
+    anchor: msg.anchor,
+    head: msg.head,
+  };
+  // Socket-level publish excludes the sender (REQ-018.1 "all OTHER users").
+  ws.publish(roomTopic(ws.data.code), JSON.stringify(relayed));
 }
 
 /** Applies a connection-status change to the room's session (via the engine). */
