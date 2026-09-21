@@ -205,6 +205,23 @@ export class RoomRegistry {
     return room != null && room.hostToken === hostToken;
   }
 
+  /**
+   * Clean up a room after session ends (REQ-004.1/2, REQ-003.3).
+   * Purges doc, turn history, presence, participants, room code, and
+   * invalidates all tokens. Called when session.phase transitions to "ended".
+   */
+  endRoom(code: string): void {
+    const room = this.rooms.get(code);
+    if (!room) return;
+
+    // Verify the session is actually ended before purging.
+    if (room.session.phase !== "ended") return;
+
+    // Purge the room from the registry (REQ-004.2: no persistence).
+    // The in-memory data is discarded; tokens are invalidated.
+    this.rooms.delete(code);
+  }
+
   /** Test/introspection helper. */
   size(): number {
     return this.rooms.size;
