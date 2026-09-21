@@ -10,6 +10,7 @@ import type {
   ServerMessage,
   TurnConfig,
   TimerTickMsg,
+  DisconnectGraceStartedMsg,
 } from "@codayon/shared";
 import { bootstrapRoom } from "../api";
 import { connectRelay, type RelayConnection } from "../collab/transport";
@@ -73,6 +74,15 @@ export const RoomEditor: Component<RoomEditorProps> = (props) => {
   const [rotationOrder, setRotationOrder] = createSignal<readonly string[]>([]);
   const [rotationNextIndex, setRotationNextIndex] = createSignal<number>(0);
 
+  // Disconnect grace period state (REQ-033)
+  interface GraceState {
+    readonly participantId: string;
+    readonly participantName: string;
+    readonly gracePeriodMs: number;
+    readonly startedAt: number;
+  }
+  const [graceState, setGraceState] = createSignal<GraceState | null>(null);
+
   onMount(async () => {
     const boot = await bootstrapRoom(props.code);
     connection = await connectRelay({
@@ -111,6 +121,18 @@ export const RoomEditor: Component<RoomEditorProps> = (props) => {
           // Update remaining time for interpolation in SessionControls
           const tick = msg as TimerTickMsg;
           setRemainingMs(tick.remainingMs);
+        } else if (msg.type === "disconnectGraceStarted") {
+          // Grace period initiated when driver/host disconnects (REQ-033, Task 7)
+          const grace = msg as DisconnectGraceStartedMsg;
+          setGraceState({
+            participantId: grace.participantId,
+            participantName: grace.participantName,
+            gracePeriodMs: grace.gracePeriodMs,
+            startedAt: grace.startedAt,
+          });
+        } else if (msg.type === "disconnectGraceResolved") {
+          // Grace period resolved; clear the state (REQ-033, Task 7)
+          setGraceState(null);
         }
       }
     });
@@ -189,6 +211,7 @@ export const RoomEditor: Component<RoomEditorProps> = (props) => {
               remainingMs={remainingMs()}
               rotationOrder={rotationOrder()}
               rotationNextIndex={rotationNextIndex()}
+              graceState={graceState()}
             />
           )}
         </div>

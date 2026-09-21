@@ -4,6 +4,7 @@
  * - Host: configure turn mode/duration, start session, end session, start turn (manual mode)
  * - Driver: request early turn end (if enabled)
  * - All users: display current session state (phase, turn config, turn timer, roster status)
+ * - Grace period: host modal + all-participant countdown banner (REQ-033, Task 7)
  */
 
 import { createSignal, createEffect, Show, type Component } from "solid-js";
@@ -13,6 +14,7 @@ import type {
   SelectionPolicy,
 } from "@codayon/shared";
 import type { RelayConnection } from "../collab/transport";
+import { GracePeriodModal } from "./GracePeriodModal";
 
 export interface SessionControlsProps {
   readonly code: string;
@@ -34,6 +36,12 @@ export interface SessionControlsProps {
   readonly remainingMs?: number | null;
   readonly rotationOrder?: readonly string[];
   readonly rotationNextIndex?: number;
+  readonly graceState?: {
+    readonly participantId: string;
+    readonly participantName: string;
+    readonly gracePeriodMs: number;
+    readonly startedAt: number;
+  } | null;
 }
 
 /**
@@ -118,6 +126,7 @@ const ConfigurationDialog: Component<{
 export const SessionControls: Component<SessionControlsProps> = (props) => {
   const [showConfig, setShowConfig] = createSignal(false);
   const [rosterOpen, setRosterOpen] = createSignal(false);
+  const [gracePeriodRemainingMs, setGracePeriodRemainingMs] = createSignal<number>(0);
   
   // Smooth countdown interpolation (REQ-027)
   const [displayMs, setDisplayMs] = createSignal<number | null>(null);
@@ -161,6 +170,24 @@ export const SessionControls: Component<SessionControlsProps> = (props) => {
         animationFrameId = 0;
       }
     }
+  });
+  
+  // Track grace period countdown (REQ-033, Task 7)
+  createEffect(() => {
+    if (props.graceState === null) {
+      setGracePeriodRemainingMs(0);
+      return;
+    }
+
+    const updateCountdown = () => {
+      const elapsed = Date.now() - props.graceState!.startedAt;
+      const remaining = Math.max(0, props.graceState!.gracePeriodMs - elapsed);
+      setGracePeriodRemainingMs(remaining);
+    };
+
+    updateCountdown(); // Initial update
+    const interval = setInterval(updateCountdown, 100);
+    return () => clearInterval(interval);
   });
   
   // Format milliseconds to MM:SS
@@ -461,6 +488,36 @@ export const SessionControls: Component<SessionControlsProps> = (props) => {
       <Show when={showConfig()}>
         <ConfigurationDialog onConfigure={handleConfigure} />
       </Show>
+
+      {/* Grace Period Countdown Banner (all participants) */}
+      <Show when={props.graceState !== null}>
+        <div class="border-l-4 border-red-500 bg-red-900/20 rounded-r-lg p-3">
+          <div class="flex items-center justify-between mb-1">
+            <div class="flex items-center gap-2">
+              <div class="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+              <span class="text-sm font-semibold text-red-300">Grace Period Active</span>
+            </div>
+            <span class={`font-mono text-sm font-bold ${
+              gracePeriodRemainingMs() > 10000 ? "text-amber-400" :
+              gracePeriodRemainingMs() > 5000 ? "text-orange-400" :
+              "text-red-400"
+            }`}>
+              {formatCountdown(gracePeriodRemainingMs())}
+            </span>
+          </div>
+          <p class="text-xs text-slate-400">
+            {props.graceState?.participantName} disconnected. Waiting for host action...
+          </p>
+        </div>
+      </Show>
+
+      {/* Grace Period Modal (host only) */}
+      <GracePeriodModal
+        graceState={props.graceState ?? null}
+        roster={props.roster}
+        connection={props.connection}
+        isHostOnly={props.role === "host"}
+      />
     </div>
   );
 };
