@@ -12,6 +12,7 @@
  */
 
 import type {
+  DisconnectState,
   HostParticipation,
   Participant,
   ParticipantId,
@@ -73,6 +74,26 @@ export type EngineEvent =
   | {
       readonly type: "earlyEndRequested";
       readonly by: ParticipantId;
+    }
+  | {
+      readonly type: "driverDisconnected";
+      readonly driverId: ParticipantId;
+      readonly disconnectedAt: number;
+      readonly gracePeriodMs: number;
+    }
+  | {
+      readonly type: "gracePeriodElapsed";
+      readonly disconnectedId: ParticipantId;
+    }
+  | {
+      readonly type: "hostActionTaken";
+      readonly action: "reassign" | "extend" | "skip";
+      readonly by: ParticipantId;
+      readonly nextDriver?: ParticipantId;
+    }
+  | {
+      readonly type: "driverReconnected";
+      readonly driverId: ParticipantId;
     };
 
 export interface CreateSessionInput {
@@ -100,6 +121,7 @@ export function createSession(input: CreateSessionInput): SessionState {
     editTokenHolder: null,
     currentTurn: null,
     rotation: null,
+    disconnectState: null,
   };
 }
 
@@ -382,6 +404,84 @@ export function applyEvent(state: SessionState, event: EngineEvent): SessionStat
       // The server will handle the actual turn end; this is just validation.
       // Return the state unchanged; the server drives the turnEnded event.
       return state;
+    }
+
+    case "driverDisconnected": {
+      // Only trigger if there's an active turn (REQ-020.1).
+      if (!state.currentTurn || state.currentTurn.driverId !== event.driverId) return state;
+      // Set disconnect grace period (REQ-020.1: pause timer, hold token).
+      const newDisconnect: DisconnectState = {
+        disconnectedId: event.driverId,
+        disconnectedAt: event.disconnectedAt,
+        gracePeriodMs: event.gracePeriodMs,
+        hostAction: null,
+      };
+      return { ...state, disconnectState: newDisconnect };
+    }
+
+    case "gracePeriodElapsed": {
+      // Only process if a disconnect is in progress for this participant.
+      if (!state.disconnectState || state.disconnectState.disconnectedId !== event.disconnectedId) {
+        return state;
+      }
+      // If host hasn't acted and policy is round-robin, auto-advance (REQ-020.4).
+      if (
+        state.disconnectState.hostAction === null &&
+        state.turnConfig?.selectionPolicy === "round-robin" &&
+        state.rotation
+      ) {
+        // Auto-advance to next in rotation.
+        const nextIdx = (state.rotation.nextIndex + 1) % state.rotation.order.length;
+        const nextDriver = state.rotation.order[nextIdx];
+        if (nextDriver && isEligibleForToken(state, nextDriver)) {
+          const newRotation: RotationState = {
+            ...state.rotation,
+            nextIndex: nextIdx,
+          };
+          return {
+            ...state,
+            rotation: newRotation,
+            disconnectState: null,
+            currentTurn: state.currentTurn ? { ...state.currentTurn, ended: true } : null,
+            // Server will drive turnAdvanced event with the next driver.
+          };
+        }
+      }
+      // If manual pass, keep turn paused until host acts (REQ-020.5).
+      // Return unchanged; server tracks the grace period elapsed.
+      return state;
+    }
+
+    case "hostActionTaken": {
+      // Only the host may take an action (REQ-005.1).
+      if (!isHost(state, event.by)) return state;
+      // Only process if a disconnect is in progress.
+      if (!state.disconnectState) return state;
+
+      // Update the disconnect state with the action (REQ-020.2).
+      const updated: DisconnectState = {
+        ...state.disconnectState,
+        hostAction: event.action,
+      };
+
+      // If reassign: host picks a new driver; server will drive turnAdvanced.
+      // If extend: hold for reconnect attempt.
+      // If skip: advance to next driver; server will drive turnAdvanced.
+
+      return { ...state, disconnectState: updated };
+    }
+
+    case "driverReconnected": {
+      // If driver reconnects within grace period and no host action (REQ-020.3).
+      if (!state.disconnectState || state.disconnectState.disconnectedId !== event.driverId) {
+        return state;
+      }
+      if (state.disconnectState.hostAction === null) {
+        // Restore token and clear disconnect state; server resumes timer (REQ-020.3).
+        return { ...state, disconnectState: null };
+      }
+      // If host has already acted, ignore reconnect; session continues with new driver.
+      return { ...state, disconnectState: null };
     }
 
     default: {

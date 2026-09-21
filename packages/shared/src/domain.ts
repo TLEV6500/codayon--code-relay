@@ -58,6 +58,25 @@ export interface Turn {
   readonly ended: boolean;
 }
 
+/**
+ * Disconnect grace period state (REQ-020, REQ-022).
+ * Tracks when a driver disconnects mid-turn and manages the grace period
+ * before auto-advance or host manual action.
+ */
+export interface DisconnectState {
+  /** The participant who disconnected (usually the current driver). */
+  readonly disconnectedId: ParticipantId;
+  /** Timestamp of disconnect (server-side). */
+  readonly disconnectedAt: number;
+  /** Grace period duration in milliseconds. */
+  readonly gracePeriodMs: number;
+  /**
+   * Host action taken: "reassign" (pick new driver), "extend" (wait for reconnect),
+   * or "skip" (advance to next driver). null = no action taken yet.
+   */
+  readonly hostAction: "reassign" | "extend" | "skip" | null;
+}
+
 /** A connected attendee and their session-scoped attributes. */
 export interface Participant {
   readonly id: ParticipantId;
@@ -101,6 +120,11 @@ export interface SessionState {
    * null when not using round-robin mode.
    */
   readonly rotation: RotationState | null;
+  /**
+   * Driver disconnect grace period state (REQ-020, REQ-022).
+   * null when no disconnect is in progress.
+   */
+  readonly disconnectState: DisconnectState | null;
 }
 
 /**
