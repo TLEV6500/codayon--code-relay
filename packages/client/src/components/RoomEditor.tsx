@@ -30,6 +30,7 @@ export interface RoomEditorProps {
   readonly clientToken: string;
   readonly clientID: string;
   readonly role: "host" | "observer" | "spectator";
+  readonly onSessionEnded?: () => void;
 }
 
 /**
@@ -185,6 +186,12 @@ export const RoomEditor: Component<RoomEditorProps> = (props) => {
           controlErrorTimeout = setTimeout(() => {
             setControlError(null);
           }, 3000);
+        } else if (msg.type === "sessionEnded") {
+          // Session has ended; transition to session-ended view (REQ-037, Task 11)
+          setSessionPhase("ended");
+          if (props.onSessionEnded) {
+            props.onSessionEnded();
+          }
         }
       }
     });

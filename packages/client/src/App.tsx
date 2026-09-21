@@ -2,6 +2,7 @@ import { createSignal, Show, type Component } from "solid-js";
 import { banner, type JoinableRole } from "@codayon/shared";
 import { createRoom, joinRoom } from "./api";
 import { RoomEditor } from "./components/RoomEditor";
+import { SessionEnded } from "./components/SessionEnded";
 
 interface Session {
   code: string;
@@ -19,6 +20,7 @@ export const App: Component = () => {
   const [busy, setBusy] = createSignal(false);
   const [joinCode, setJoinCode] = createSignal("");
   const [name, setName] = createSignal("");
+  const [sessionEnded, setSessionEnded] = createSignal(false);
 
   async function onCreate() {
     setBusy(true);
@@ -66,31 +68,43 @@ export const App: Component = () => {
     <div class="min-h-screen bg-slate-950 text-slate-100">
       <Show when={session()} fallback={<Lobby />}>
         {(s) => (
-          <div class="flex h-screen flex-col">
-            <header class="flex items-center justify-between border-b border-slate-800 px-4 py-3">
-              <div>
-                <span class="font-bold text-emerald-400">Codayon</span>
-                <span class="ml-3 text-sm text-slate-400">
-                  Room <span class="font-mono text-slate-200">{s().code}</span> ·{" "}
-                  {s().role}
-                </span>
-              </div>
-              <button
-                class="rounded-md border border-slate-700 px-3 py-1 text-sm text-slate-300 hover:bg-slate-800"
-                onClick={() => setSession(null)}
-              >
-                Leave
-              </button>
-            </header>
-            <main class="min-h-0 flex-1 p-4">
-              <RoomEditor
-                code={s().code}
-                clientToken={s().clientToken}
-                clientID={s().clientID}
-                role={s().role}
-              />
-            </main>
-          </div>
+          <Show when={sessionEnded()} fallback={
+            <div class="flex h-screen flex-col">
+              <header class="flex items-center justify-between border-b border-slate-800 px-4 py-3">
+                <div>
+                  <span class="font-bold text-emerald-400">Codayon</span>
+                  <span class="ml-3 text-sm text-slate-400">
+                    Room <span class="font-mono text-slate-200">{s().code}</span> ·{" "}
+                    {s().role}
+                  </span>
+                </div>
+                <button
+                  class="rounded-md border border-slate-700 px-3 py-1 text-sm text-slate-300 hover:bg-slate-800"
+                  onClick={() => setSession(null)}
+                >
+                  Leave
+                </button>
+              </header>
+              <main class="min-h-0 flex-1 p-4">
+                <RoomEditor
+                  code={s().code}
+                  clientToken={s().clientToken}
+                  clientID={s().clientID}
+                  role={s().role}
+                  onSessionEnded={() => setSessionEnded(true)}
+                />
+              </main>
+            </div>
+          }>
+            {/* Session-ended view */}
+            <SessionEnded
+              code={s().code}
+              onReturnToLobby={() => {
+                setSession(null);
+                setSessionEnded(false);
+              }}
+            />
+          </Show>
         )}
       </Show>
     </div>
