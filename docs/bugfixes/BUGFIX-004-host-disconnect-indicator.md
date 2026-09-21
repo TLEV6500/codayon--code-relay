@@ -482,6 +482,7 @@ Alternative considered:
 ## Related Issues
 
 - **BUGFIX-002** — Control channel enables SessionSnapshotMsg
-- **BUGFIX-005** (Future) — Session auto-cleanup when all disconnect
+- **BUGFIX-005** — nginx CRLF entrypoint crash (Docker Compose stack outage)
+- **BUGFIX-006** (Future) — Session auto-cleanup when all disconnect
 - **Task: Grace Period UI** — Driver disconnect visual feedback
 - **Task: Connection History** — Log of participant activity
