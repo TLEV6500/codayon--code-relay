@@ -148,7 +148,23 @@ Each bugfix spec includes:
 
 ---
 
-### ⏳ BUGFIX-005: Session Auto-Cleanup When No Users Present
+### 🔴 BUGFIX-005: nginx Container Crashes on Startup Due to CRLF Line Endings
+
+**File:** `BUGFIX-005-nginx-crlf-entrypoint-crash.md`
+
+**Issue:** `docker/nginx/entrypoint.sh` (and its `.conf` files) were committed with CRLF line endings. BusyBox `/bin/sh` in the `nginx:1.27-alpine` image cannot parse the CRLF entrypoint script, so the nginx container crashes on startup (`Exited (2)`) in **both** `dev` and `prod` Compose profiles.
+
+**Root Cause:** No `.gitattributes` to enforce LF normalization; CRLF checked in (likely via a Windows editor or `core.autocrlf`).
+
+**Impact:** Full outage of the documented Quick Start (`docker compose --profile dev up` → `http://localhost:8080`). nginx is the sole same-origin entry point per FEAT-002; `client`/`server` containers come up but are not reachable via the unified origin.
+
+**Fix:** Normalize line endings in `docker/nginx/*.sh`/`*.conf` to LF, add `.gitattributes`, optionally harden the Dockerfile with a defensive `sed -i 's/\r$//'`.
+
+**Impact:** Critical (total outage of Docker stack) | **Complexity:** Low | **Status:** 🔴 Open — spec ready, implementation pending on a new branch
+
+---
+
+### ⏳ BUGFIX-006: Session Auto-Cleanup When No Users Present
 
 **File:** NOT YET DOCUMENTED
 
@@ -180,6 +196,7 @@ Each bugfix spec includes:
 | [BUGFIX-002](BUGFIX-002-missing-host-controls.md) | Spec | Reviewers, Testers | Host controls implementation |
 | [BUGFIX-003](BUGFIX-003-driver-early-end.md) | Spec | Reviewers, Testers | Driver early-end action |
 | [BUGFIX-004](BUGFIX-004-host-disconnect-indicator.md) | Spec | Reviewers, Testers | Roster with connection status |
+| [BUGFIX-005](BUGFIX-005-nginx-crlf-entrypoint-crash.md) | Spec | Reviewers, DevOps | nginx CRLF crash — Docker stack outage |
 
 ---
 
