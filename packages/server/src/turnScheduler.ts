@@ -14,8 +14,6 @@
  * (ws.ts) owns the callbacks and drives session state transitions.
  */
 
-import type { ParticipantId } from "@codayon/shared";
-
 /**
  * Callback invoked each time a tick occurs (every 1s).
  * Caller should broadcast a TimerTickMsg with the remaining time.
@@ -29,6 +27,12 @@ export type OnTickCallback = (remainingMs: number) => void;
 export type OnExpiryCallback = () => void;
 
 /**
+ * Callback invoked when a grace period expires.
+ * Caller should apply gracePeriodElapsed event and handle auto-advance per policy.
+ */
+export type OnGracePeriodExpiredCallback = () => void;
+
+/**
  * Per-room timer state. Tracks both the turn-expiry timer and the tick interval.
  */
 export interface TurnTimers {
@@ -39,9 +43,23 @@ export interface TurnTimers {
 }
 
 /**
+ * Per-room grace period timer state. Tracks the disconnect grace period timer.
+ */
+export interface GracePeriodTimers {
+  readonly graceTimeoutId: ReturnType<typeof setTimeout> | null;
+  readonly gracePeriodMs: number;
+  readonly startedAt: number;
+}
+
+/**
  * Maps room codes to their active timers (null if no turn is active).
  */
 const timersByRoom = new Map<string, TurnTimers>();
+
+/**
+ * Maps room codes to their active grace period timers (null if no grace period is active).
+ */
+const gracePeriodsByRoom = new Map<string, GracePeriodTimers>();
 
 /**
  * Schedule a turn to expire after `durationMs` milliseconds.
@@ -119,7 +137,65 @@ export function startTurnTicks(code: string, onTick: OnTickCallback): void {
 }
 
 /**
- * Cancel all timers (expiry + ticks) for a room.
+ * Schedule a disconnect grace period to expire after `gracePeriodMs` milliseconds.
+ *
+ * If a grace period already exists for this room, it is cancelled first (prevents leaks).
+ * Invokes `onExpired` when the timer fires.
+ *
+ * Returns the GracePeriodTimers record for this room.
+ *
+ * @param code Room code
+ * @param gracePeriodMs Grace period duration in milliseconds
+ * @param onExpired Callback to invoke when grace period expires
+ */
+export function scheduleGracePeriod(
+  code: string,
+  gracePeriodMs: number,
+  onExpired: OnGracePeriodExpiredCallback,
+): GracePeriodTimers {
+  // Cancel any existing grace period to prevent leaks.
+  cancelGracePeriod(code);
+
+  const startedAt = Date.now();
+
+  // Schedule the grace period callback to fire after the duration.
+  const graceTimeoutId = setTimeout(() => {
+    // Clear the record when grace period expires.
+    gracePeriodsByRoom.delete(code);
+    onExpired();
+  }, gracePeriodMs);
+
+  const timers: GracePeriodTimers = {
+    graceTimeoutId,
+    gracePeriodMs,
+    startedAt,
+  };
+
+  gracePeriodsByRoom.set(code, timers);
+  return timers;
+}
+
+/**
+ * Cancel the grace period timer for a room.
+ *
+ * Idempotent: calling multiple times is safe.
+ * Also clears the grace period record from the global map.
+ *
+ * @param code Room code
+ */
+export function cancelGracePeriod(code: string): void {
+  const timers = gracePeriodsByRoom.get(code);
+  if (!timers) return;
+
+  if (timers.graceTimeoutId !== null) {
+    clearTimeout(timers.graceTimeoutId);
+  }
+
+  gracePeriodsByRoom.delete(code);
+}
+
+/**
+ * Cancel all timers (turn expiry + ticks) for a room.
  *
  * Idempotent: calling multiple times is safe.
  * Also clears the timers record from the global map.
@@ -155,5 +231,8 @@ export function getTimersForRoom(code: string): TurnTimers | undefined {
 export function clearAllTimers(): void {
   for (const code of Array.from(timersByRoom.keys())) {
     cancelTurnTimers(code);
+  }
+  for (const code of Array.from(gracePeriodsByRoom.keys())) {
+    cancelGracePeriod(code);
   }
 }

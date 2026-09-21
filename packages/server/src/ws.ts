@@ -32,12 +32,15 @@ import {
   type ClientMessage,
   type ParticipantId,
   type ServerMessage,
+  type SessionState,
 } from "@codayon/shared";
 import type { RoomRegistry } from "./rooms";
 import {
   scheduleTurnExpiry,
   startTurnTicks,
   cancelTurnTimers,
+  scheduleGracePeriod,
+  cancelGracePeriod,
 } from "./turnScheduler";
 
 /** Contextual data attached to each socket at upgrade time. */
@@ -96,7 +99,27 @@ export function createWebSocketHandler(
       // Mark the participant connected in the session model.
       const room = registry.get(ws.data.code);
       if (room) {
-        room.session = applyConnection(room, ws.data.participantId, true);
+        const oldState = room.session;
+        room.session = applyConnection(room.session, ws.data.participantId, true);
+
+        // Handle grace period resumption if driver reconnects (REQ-032)
+        if (
+          oldState.disconnectState &&
+          oldState.disconnectState.disconnectedId === ws.data.participantId &&
+          room.session.disconnectState === null &&
+          oldState.disconnectState.hostAction === null
+        ) {
+          // Driver reconnected within grace period
+          cancelGracePeriod(ws.data.code);
+
+          const resolvedMsg: ServerMessage = {
+            channel: "control",
+            type: "disconnectGraceResolved",
+            resolution: "reconnected",
+            participantId: ws.data.participantId,
+          };
+          ws.publish(roomTopic(ws.data.code), JSON.stringify(resolvedMsg));
+        }
       }
     },
 
@@ -130,9 +153,56 @@ export function createWebSocketHandler(
       };
       ws.publish(roomTopic(ws.data.code), JSON.stringify(gone));
       ws.unsubscribe(roomTopic(ws.data.code));
+
       const room = registry.get(ws.data.code);
       if (room) {
-        room.session = applyConnection(room, ws.data.participantId, false);
+        const oldState = room.session;
+        room.session = applyConnection(
+          room.session,
+          ws.data.participantId,
+          false,
+        );
+
+        // Handle grace period start on driver disconnect (REQ-032)
+        if (
+          oldState.currentTurn &&
+          oldState.currentTurn.driverId === ws.data.participantId &&
+          oldState.turnConfig?.durationMs
+        ) {
+          const gracePeriodMs = 30000;
+
+          // Mark disconnect in session
+          const newState = applyEvent(room.session, {
+            type: "driverDisconnected",
+            driverId: ws.data.participantId,
+            disconnectedAt: Date.now(),
+            gracePeriodMs,
+          });
+          room.session = newState;
+
+          // Broadcast grace period started
+          const participant = newState.participants.get(ws.data.participantId);
+          const graceStartedMsg: ServerMessage = {
+            channel: "control",
+            type: "disconnectGraceStarted",
+            participantId: ws.data.participantId,
+            participantName: participant?.name ?? "Unknown",
+            role: participant?.role ?? "observer",
+            gracePeriodMs,
+            startedAt: Date.now(),
+          };
+          ws.publish(roomTopic(ws.data.code), JSON.stringify(graceStartedMsg));
+
+          // Schedule grace period expiry with closure over registry and getServer
+          scheduleGracePeriod(ws.data.code, gracePeriodMs, () => {
+            handleGracePeriodExpiry(
+              ws.data.code,
+              ws.data.participantId,
+              registry,
+              getServer(),
+            );
+          });
+        }
       }
     },
   };
@@ -254,13 +324,16 @@ function handlePresenceMessage(
   ws.publish(roomTopic(ws.data.code), JSON.stringify(relayed));
 }
 
-/** Applies a connection-status change to the room's session (via the engine). */
+/**
+ * Applies a connection-status change to the room's session (via the engine).
+ * Returns the new session state and a flag indicating whether grace period should start.
+ */
 function applyConnection(
-  room: NonNullable<ReturnType<RoomRegistry["get"]>>,
+  state: SessionState,
   id: ParticipantId,
   connected: boolean,
-) {
-  return applyEvent(room.session, {
+): SessionState {
+  return applyEvent(state, {
     type: "connectionChanged",
     id,
     connected,
@@ -348,6 +421,8 @@ function handleControlMessage(
       
       // Cancel any running turn timers
       cancelTurnTimers(code);
+      // Cancel any grace period timers
+      cancelGracePeriod(code);
       
       room.session = applyEvent(room.session, {
         type: "sessionEnded",
@@ -457,6 +532,88 @@ function handleControlMessage(
       return;
     }
 
+    case "resolveGrace": {
+      // Only host can resolve a grace period (REQ-032).
+      if (!isHost) {
+        send(ws, {
+          channel: "control",
+          type: "controlRejected",
+          reason: "not-host",
+        });
+        return;
+      }
+
+      // Grace period must be active (REQ-032).
+      if (!room.session.disconnectState) {
+        send(ws, {
+          channel: "control",
+          type: "controlRejected",
+          reason: "invalid-state",
+        });
+        return;
+      }
+
+      // Apply the host action to the session (REQ-032)
+      room.session = applyEvent(room.session, {
+        type: "hostActionTaken",
+        action: msg.action,
+        by: actor,
+        nextDriver: msg.action === "reassign" ? msg.newDriver : undefined,
+      });
+
+      // Cancel the grace period timer (auto-advance is unnecessary now)
+      cancelGracePeriod(code);
+
+      // Capture the disconnected participant ID before state changes
+      const disconnectedId = room.session.disconnectState?.disconnectedId;
+
+      // Broadcast resolution message
+      const resolutionMsg: ServerMessage = {
+        channel: "control",
+        type: "disconnectGraceResolved",
+        resolution:
+          msg.action === "reassign"
+            ? "reassigned"
+            : msg.action === "extend"
+              ? "extended"
+              : "skipped",
+        participantId: disconnectedId ?? "",
+      };
+      if (server) {
+        server.publish(roomTopic(code), JSON.stringify(resolutionMsg));
+      }
+
+      // If reassign or skip, advance the turn (REQ-032)
+      if (msg.action !== "extend") {
+        if (msg.action === "reassign" && msg.newDriver) {
+          // Host picked a specific driver
+          room.session = applyEvent(room.session, {
+            type: "turnAdvanced",
+            nextDriver: msg.newDriver,
+            startedAt: Date.now(),
+          });
+        } else if (msg.action === "skip") {
+          // Auto-advance to next driver
+          const nextDriver = findNextConnectedDriver(room.session);
+          if (nextDriver) {
+            room.session = applyEvent(room.session, {
+              type: "turnAdvanced",
+              nextDriver: nextDriver.driver,
+              startedAt: Date.now(),
+            });
+          }
+        }
+
+        // Start new turn timers if advanced
+        if (room.session.phase === "active" && room.session.currentTurn) {
+          scheduleAndStartTurnTimers(room, server, code, registry);
+        }
+      }
+
+      broadcastSessionState(room, server, code);
+      return;
+    }
+
     default:
       return;
   }
@@ -533,6 +690,60 @@ function scheduleAndStartTurnTimers(
     };
     server.publish(roomTopic(code), JSON.stringify(tickMsg));
   });
+}
+
+/**
+ * Handle grace period expiry callback (REQ-032).
+ * Called when disconnect grace period times out.
+ */
+function handleGracePeriodExpiry(
+  code: string,
+  disconnectedId: ParticipantId,
+  registry: RoomRegistry,
+  server: Server<SocketData> | undefined,
+): void {
+  const currentRoom = registry.get(code);
+  if (!currentRoom) return;
+
+  // Apply gracePeriodElapsed event
+  const elapsedState = applyEvent(currentRoom.session, {
+    type: "gracePeriodElapsed",
+    disconnectedId,
+  });
+
+  currentRoom.session = elapsedState;
+
+  // If round-robin and no host action taken yet, auto-advance
+  if (
+    elapsedState.disconnectState === null &&
+    elapsedState.turnConfig?.selectionPolicy === "round-robin"
+  ) {
+    // Auto-advance occurred in engine; broadcast resolution
+    const resolvedMsg: ServerMessage = {
+      channel: "control",
+      type: "disconnectGraceResolved",
+      resolution: "skipped",
+      participantId: disconnectedId,
+    };
+    if (server) {
+      server.publish(roomTopic(code), JSON.stringify(resolvedMsg));
+    }
+
+    // Advance to next turn
+    const nextDriver = findNextConnectedDriver(elapsedState);
+    if (nextDriver && server) {
+      currentRoom.session = applyEvent(currentRoom.session, {
+        type: "turnAdvanced",
+        nextDriver: nextDriver.driver,
+        startedAt: Date.now(),
+      });
+
+      // Start timers for new turn
+      scheduleAndStartTurnTimers(currentRoom, server, code, registry);
+    }
+  }
+
+  broadcastSessionState(currentRoom, server, code);
 }
 
 /**

@@ -96,6 +96,15 @@ export interface EarlyEndMsg {
   readonly type: "earlyEnd";
 }
 
+/** Host: resolve a disconnect grace period with an action (REQ-032, Task 6). */
+export interface ResolveGraceMsg {
+  readonly channel: "control";
+  readonly type: "resolveGrace";
+  readonly action: "reassign" | "extend" | "skip";
+  /** New driver if action is "reassign"; omitted otherwise. */
+  readonly newDriver?: ParticipantId;
+}
+
 export type ClientMessage =
   | GetDocumentMsg
   | PullUpdatesMsg
@@ -105,7 +114,8 @@ export type ClientMessage =
   | StartSessionMsg
   | EndSessionMsg
   | StartTurnMsg
-  | EarlyEndMsg;
+  | EarlyEndMsg
+  | ResolveGraceMsg;
 
 // ---------------------------------------------------------------------------
 // Server -> Client
@@ -221,6 +231,25 @@ export interface TimerTickMsg {
   readonly remainingMs: number;
 }
 
+/** Disconnect grace period has started; driver/host disconnected mid-turn (REQ-032, Task 6). */
+export interface DisconnectGraceStartedMsg {
+  readonly channel: "control";
+  readonly type: "disconnectGraceStarted";
+  readonly participantId: ParticipantId;
+  readonly participantName: string;
+  readonly role: Role;
+  readonly gracePeriodMs: number;
+  readonly startedAt: number;
+}
+
+/** Disconnect grace period has resolved; auto-advance or host action taken (REQ-032, Task 6). */
+export interface DisconnectGraceResolvedMsg {
+  readonly channel: "control";
+  readonly type: "disconnectGraceResolved";
+  readonly resolution: "reconnected" | "reassigned" | "extended" | "skipped";
+  readonly participantId: ParticipantId;
+}
+
 export type ServerMessage =
   | DocumentMsg
   | UpdatesMsg
@@ -234,4 +263,6 @@ export type ServerMessage =
   | ControlRejectedMsg
   | TurnStartedMsg
   | TurnEndedMsg
-  | TimerTickMsg;
+  | TimerTickMsg
+  | DisconnectGraceStartedMsg
+  | DisconnectGraceResolvedMsg;

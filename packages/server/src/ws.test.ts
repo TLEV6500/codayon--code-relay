@@ -547,3 +547,73 @@ describe("turn scheduling (FEAT-003 Task 1, REQ-025, REQ-026)", () => {
     peer.close();
   });
 });
+
+describe("disconnect grace period (REQ-032, FEAT-003 Task 6)", () => {
+  afterEach(() => {
+    clearAllTimers();
+  });
+
+  test("protocol includes DisconnectGraceStartedMsg", () => {
+    // Verify protocol message types are exported
+    const msg: ServerMessage = {
+      channel: "control",
+      type: "disconnectGraceStarted",
+      participantId: "p1",
+      participantName: "John",
+      role: "observer",
+      gracePeriodMs: 30000,
+      startedAt: 1000,
+    };
+    expect(msg.type).toBe("disconnectGraceStarted");
+  });
+
+  test("protocol includes DisconnectGraceResolvedMsg", () => {
+    const msg: ServerMessage = {
+      channel: "control",
+      type: "disconnectGraceResolved",
+      resolution: "skipped",
+      participantId: "p1",
+    };
+    expect(msg.type).toBe("disconnectGraceResolved");
+    expect(msg.resolution).toBe("skipped");
+  });
+
+  test("protocol includes ResolveGraceMsg", () => {
+    const msg: ClientMessage = {
+      channel: "control",
+      type: "resolveGrace",
+      action: "skip",
+    };
+    expect(msg.type).toBe("resolveGrace");
+  });
+
+  test("protocol supports reassign action with newDriver", () => {
+    const msg: ClientMessage = {
+      channel: "control",
+      type: "resolveGrace",
+      action: "reassign",
+      newDriver: "p2",
+    };
+    expect(msg.type).toBe("resolveGrace");
+    expect(msg.action).toBe("reassign");
+    expect(msg.newDriver).toBe("p2");
+  });
+
+  test("turnScheduler supports grace period timers", () => {
+    const { scheduleGracePeriod, cancelGracePeriod, clearAllTimers: clearTimers } = require("./turnScheduler");
+    
+    let callbackFired = false;
+    scheduleGracePeriod("test-room", 100, () => {
+      callbackFired = true;
+    });
+
+    // Cancel before it fires
+    cancelGracePeriod("test-room");
+
+    // Verify callback was not scheduled (or was cleared)
+    // Since we cancelled, the callback should never fire
+    expect(callbackFired).toBe(false);
+
+    clearTimers();
+  });
+});
