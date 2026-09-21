@@ -538,6 +538,7 @@ function scheduleAndStartTurnTimers(
 /**
  * Broadcast the current session state to all participants (used after config/state changes).
  * Sends the SessionSnapshotMsg with current phase, config, and roster.
+ * Also sends RotationSnapshotMsg if using round-robin selection policy (REQ-031).
  */
 function broadcastSessionState(
   room: NonNullable<ReturnType<RoomRegistry["get"]>>,
@@ -562,4 +563,18 @@ function broadcastSessionState(
   };
 
   server.publish(roomTopic(code), JSON.stringify(msg));
+
+  // Broadcast rotation snapshot for round-robin mode (REQ-031)
+  if (
+    room.session.turnConfig?.selectionPolicy === "round-robin" &&
+    room.session.rotation
+  ) {
+    const rotationMsg: ServerMessage = {
+      channel: "control",
+      type: "rotationSnapshot",
+      order: room.session.rotation.order,
+      nextIndex: room.session.rotation.nextIndex,
+    };
+    server.publish(roomTopic(code), JSON.stringify(rotationMsg));
+  }
 }

@@ -5,6 +5,7 @@ import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { Compartment } from "@codemirror/state";
 import type {
   SessionSnapshotMsg,
+  RotationSnapshotMsg,
   TurnStartedMsg,
   ServerMessage,
   TurnConfig,
@@ -68,6 +69,10 @@ export const RoomEditor: Component<RoomEditorProps> = (props) => {
   // Turn timer tracking (REQ-027)
   const [remainingMs, setRemainingMs] = createSignal<number | null>(null);
 
+  // Round-robin rotation order tracking (REQ-031)
+  const [rotationOrder, setRotationOrder] = createSignal<readonly string[]>([]);
+  const [rotationNextIndex, setRotationNextIndex] = createSignal<number>(0);
+
   onMount(async () => {
     const boot = await bootstrapRoom(props.code);
     connection = await connectRelay({
@@ -87,6 +92,10 @@ export const RoomEditor: Component<RoomEditorProps> = (props) => {
           setSessionPhase(snapshot.phase);
           setTurnConfig(snapshot.turnConfig);
           setRoster(snapshot.roster);
+        } else if (msg.type === "rotationSnapshot") {
+          const rotation = msg as RotationSnapshotMsg;
+          setRotationOrder(rotation.order);
+          setRotationNextIndex(rotation.nextIndex);
         } else if (msg.type === "turnStarted") {
           const turn = msg as TurnStartedMsg;
           setCurrentDriver(turn.driver);
@@ -178,6 +187,8 @@ export const RoomEditor: Component<RoomEditorProps> = (props) => {
               turnNumber={turnNumber()}
               roster={roster()}
               remainingMs={remainingMs()}
+              rotationOrder={rotationOrder()}
+              rotationNextIndex={rotationNextIndex()}
             />
           )}
         </div>

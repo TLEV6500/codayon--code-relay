@@ -32,6 +32,8 @@ export interface SessionControlsProps {
     readonly connected: boolean;
   }[];
   readonly remainingMs?: number | null;
+  readonly rotationOrder?: readonly string[];
+  readonly rotationNextIndex?: number;
 }
 
 /**
@@ -245,6 +247,30 @@ export const SessionControls: Component<SessionControlsProps> = (props) => {
     return isManualMode && isHostNotDriving && isSessionActive;
   };
 
+  /**
+   * Get participant name from roster by ID.
+   */
+  const getParticipantName = (id: string): string => {
+    const participant = props.roster?.find((p) => p.id === id);
+    return participant?.name ?? id.substring(0, 8);
+  };
+
+  /**
+   * Determine if rotation order should be displayed.
+   * Show when:
+   * - Selection policy is round-robin
+   * - Session is active
+   * - Rotation order exists and has participants
+   */
+  const shouldShowRotationOrder = () => {
+    return (
+      props.turnConfig?.selectionPolicy === "round-robin" &&
+      props.sessionPhase === "active" &&
+      props.rotationOrder &&
+      props.rotationOrder.length > 0
+    );
+  };
+
   return (
     <div class="flex flex-col gap-3">
       {/* Host Control Panel */}
@@ -374,6 +400,40 @@ export const SessionControls: Component<SessionControlsProps> = (props) => {
             )}
           </Show>
         </div>
+
+        {/* Rotation Order Display (round-robin mode) */}
+        <Show when={shouldShowRotationOrder()}>
+          <div class="mt-3 pt-3 border-t border-slate-800">
+            <h4 class="text-xs font-semibold text-slate-300 mb-2">Rotation Order</h4>
+            <div class="space-y-1">
+              {props.rotationOrder?.map((participantId, index) => (
+                <div
+                  class={`text-xs px-2 py-1 rounded flex items-center gap-2 ${
+                    index === props.rotationNextIndex
+                      ? "bg-blue-900/50 border border-blue-700"
+                      : "bg-slate-800/50"
+                  }`}
+                >
+                  <span class="text-slate-500 font-mono text-xs w-5">
+                    {index + 1}.
+                  </span>
+                  <span
+                    class={
+                      index === props.rotationNextIndex
+                        ? "text-blue-400 font-semibold"
+                        : "text-slate-300"
+                    }
+                  >
+                    {getParticipantName(participantId)}
+                  </span>
+                  <Show when={index === props.rotationNextIndex}>
+                    <span class="text-xs text-blue-400 ml-auto">→ next</span>
+                  </Show>
+                </div>
+              ))}
+            </div>
+          </div>
+        </Show>
 
         {/* Roster Display */}
         <Show when={rosterOpen() && props.roster}>

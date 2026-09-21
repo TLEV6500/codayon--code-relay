@@ -173,6 +173,16 @@ export interface SessionSnapshotMsg {
   }[];
 }
 
+/** Round-robin rotation order snapshot (REQ-031). Broadcast when selectionPolicy='round-robin'. */
+export interface RotationSnapshotMsg {
+  readonly channel: "control";
+  readonly type: "rotationSnapshot";
+  /** Ordered list of participant IDs eligible for the rotation. */
+  readonly order: readonly ParticipantId[];
+  /** Index into order pointing to the next driver to be selected. */
+  readonly nextIndex: number;
+}
+
 /** Session has ended; clients should tear down (REQ-004). */
 export interface SessionEndedMsg {
   readonly channel: "control";
@@ -219,6 +229,7 @@ export type ServerMessage =
   | PresenceGoneMsg
   | RoleAssignedMsg
   | SessionSnapshotMsg
+  | RotationSnapshotMsg
   | SessionEndedMsg
   | ControlRejectedMsg
   | TurnStartedMsg
