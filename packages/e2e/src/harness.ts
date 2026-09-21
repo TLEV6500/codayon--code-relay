@@ -1,0 +1,266 @@
+import type { Server } from "bun";
+import { createAppWithDeps, createWebSocketHandler, tryUpgrade, type SocketData } from "../../server/src/test-exports";
+import * as fs from "fs";
+import * as path from "path";
+
+/**
+ * E2E test harness: boots a real server + client on ephemeral ports for test isolation.
+ *
+ * Each test gets its own harness instance with its own ports, so tests don't interfere.
+ * Within a test, multiple WebView instances can be opened against the same harness.
+ */
+export interface E2EHarness {
+    /** Base URL for the client (e.g., http://127.0.0.1:54321) */
+    readonly baseUrl: string;
+
+    /** Opens a new WebView instance connected to this harness's client. */
+    openView(): Promise<Bun.WebView>;
+
+    /** Helper: creates a new room and returns its metadata. */
+    createRoom(opts?: {
+        lang?: string;
+        turnsPerRound?: number;
+        turnDurationMs?: number;
+        earlyEndAllowed?: boolean;
+        selectionPolicy?: "round-robin" | "manual";
+    }): Promise<{
+        code: string;
+        hostToken: string;
+        hostClientToken: string;
+        observerClientToken: string;
+    }>;
+
+    /** Tears down both servers and closes all tracked WebView instances. */
+    close(): Promise<void>;
+}
+
+interface TrackedView {
+    view: Bun.WebView;
+}
+
+/**
+ * Starts a new E2E harness: boots server + client servers on ephemeral ports.
+ *
+ * The client server reverse-proxies /api and /ws to the server, giving the
+ * browser a single same-origin baseUrl (mirroring FEAT-002's nginx contract
+ * but without nginx).
+ */
+export async function startHarness(): Promise<E2EHarness> {
+    // Ensure client dist is built.
+    const clientDistPath = path.resolve(
+        import.meta.dir,
+        "../../client/dist",
+    );
+    if (!fs.existsSync(clientDistPath)) {
+        throw new Error(
+            `Client dist not found at ${clientDistPath}. Run 'bun run build:client' first.`,
+        );
+    }
+
+    // Create the app + registry for the server.
+    const { app, registry } = createAppWithDeps();
+
+    // Late-bind the server instance so the WS handler can access it for pub/sub.
+    let serverInstance: Server<SocketData> | undefined;
+    const websocket = createWebSocketHandler(registry, () => serverInstance);
+
+    // Boot the server on port 0 (OS assigns ephemeral port).
+    serverInstance = Bun.serve({
+        port: 0,
+        fetch(req, srv) {
+            const upgrade = tryUpgrade(req, srv, registry);
+            if (upgrade === "upgraded") return undefined;
+            if (upgrade instanceof Response) return upgrade;
+            return app.fetch(req, { server: srv });
+        },
+        websocket,
+    });
+
+    const serverPort = serverInstance.port;
+    const serverUrl = `http://127.0.0.1:${serverPort}`;
+
+    // Boot the client server on port 0.
+    // It serves static files from dist, reverse-proxies /api + /ws to the server.
+    const clientServer = Bun.serve({
+        port: 0,
+        async fetch(req) {
+            const url = new URL(req.url);
+
+            // Proxy /api requests to the server.
+            if (url.pathname.startsWith("/api")) {
+                const targetUrl = `${serverUrl}${url.pathname}${url.search}`;
+                return fetch(targetUrl, {
+                    method: req.method,
+                    headers: req.headers,
+                    body: req.method !== "GET" && req.method !== "HEAD" ? req.body : undefined,
+                });
+            }
+
+            // For /ws, we need to handle the upgrade. However, Bun.WebView doesn't
+            // support WebSocket upgrade forwarding at the static-server level in the
+            // same way. Instead, we'll handle raw socket upgrades manually.
+            if (url.pathname === "/ws") {
+                const upgrade = req.headers.get("upgrade")?.toLowerCase();
+                if (upgrade === "websocket") {
+                    // Upgrade to WS against the real server.
+                    const targetUrl = `${serverUrl}${url.pathname}`;
+                    return fetch(targetUrl, {
+                        method: req.method,
+                        headers: req.headers,
+                        body: req.method !== "GET" && req.method !== "HEAD" ? req.body : undefined,
+                    });
+                }
+            }
+
+            // Try to serve a file from dist.
+            const filePath = url.pathname === "/" ? "/index.html" : url.pathname;
+            const fullPath = path.join(clientDistPath, filePath);
+
+            // Prevent directory traversal.
+            if (!fullPath.startsWith(clientDistPath)) {
+                return new Response("Not found", { status: 404 });
+            }
+
+            if (fs.existsSync(fullPath) && fs.statSync(fullPath).isFile()) {
+                const content = fs.readFileSync(fullPath);
+                const contentType = getContentType(filePath);
+                return new Response(content, {
+                    headers: { "Content-Type": contentType },
+                });
+            }
+
+            // SPA fallback: serve index.html for any route that doesn't have an extension.
+            if (!path.extname(filePath)) {
+                const indexPath = path.join(clientDistPath, "index.html");
+                const content = fs.readFileSync(indexPath);
+                return new Response(content, {
+                    headers: { "Content-Type": "text/html; charset=utf-8" },
+                });
+            }
+
+            return new Response("Not found", { status: 404 });
+        },
+    });
+
+    const clientPort = clientServer.port;
+    const baseUrl = `http://127.0.0.1:${clientPort}`;
+
+    const trackedViews: TrackedView[] = [];
+
+    const harness: E2EHarness = {
+        baseUrl,
+
+        async openView(): Promise<Bun.WebView> {
+            const view = new Bun.WebView({
+                backend: "chrome",
+                headless: true,
+
+            });
+            trackedViews.push({ view });
+            return view;
+        },
+
+        async createRoom(_opts = {}) {
+            // opts parameter kept for future use (e.g., custom turn duration, lang, etc.)
+            // For now, we use server defaults.
+
+            // Create room via the server's HTTP endpoint.
+            const createRes = await fetch(`${serverUrl}/api/rooms`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    hostParticipation: "host-participant", // Host can also be a driver
+                    hostName: "Host",
+                }),
+            });
+
+            if (!createRes.ok) {
+                throw new Error(
+                    `Failed to create room: ${createRes.status} ${await createRes.text()}`,
+                );
+            }
+
+            const room = (await createRes.json()) as {
+                code: string;
+                hostToken: string;
+                clientToken: string;
+            };
+            const { code, hostToken, clientToken: hostClientToken } = room;
+
+            // Join as observer to get an observer client token.
+            const joinObsRes = await fetch(`${serverUrl}/api/rooms/${code}/join`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    role: "observer",
+                    name: "Observer",
+                }),
+            });
+
+            if (!joinObsRes.ok) {
+                throw new Error(
+                    `Failed to join as observer: ${joinObsRes.status} ${await joinObsRes.text()}`,
+                );
+            }
+
+            const joinedObs = (await joinObsRes.json()) as { clientToken: string };
+            const observerClientToken = joinedObs.clientToken;
+
+            return {
+                code,
+                hostToken,
+                hostClientToken,
+                observerClientToken,
+            };
+        },
+
+        async close(): Promise<void> {
+            // Close all tracked views.
+            for (const { view } of trackedViews) {
+                try {
+                    view.close();
+                } catch {
+                    // Ignore errors if already closed.
+                }
+            }
+
+            // Close servers. Note: Bun's `Server` type doesn't expose a close method;
+            // we rely on process cleanup or manual tracking if needed.
+            // For now, we just clear the reference.
+            try {
+                await serverInstance?.stop();
+            } catch {
+                // Ignore errors.
+            }
+
+            try {
+                await clientServer.stop?.();
+            } catch {
+                // Ignore errors.
+            }
+        },
+    };
+
+    return harness;
+}
+
+/**
+ * Infer Content-Type from file extension.
+ */
+function getContentType(filePath: string): string {
+    const ext = path.extname(filePath).toLowerCase();
+    const types: Record<string, string> = {
+        ".html": "text/html; charset=utf-8",
+        ".css": "text/css",
+        ".js": "application/javascript",
+        ".json": "application/json",
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".gif": "image/gif",
+        ".svg": "image/svg+xml",
+        ".woff": "font/woff",
+        ".woff2": "font/woff2",
+        ".ttf": "font/ttf",
+    };
+    return types[ext] ?? "application/octet-stream";
+}

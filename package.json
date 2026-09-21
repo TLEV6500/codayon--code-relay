@@ -8,12 +8,13 @@
   ],
   "scripts": {
     "test": "bun test",
+    "test:e2e": "bun test packages/e2e",
     "dev:server": "bun run --cwd packages/server dev",
     "dev:client": "bun run --cwd packages/client dev",
     "preview:server": "bun run --cwd packages/server start",
     "preview:client": "bun run --cwd packages/client preview",
     "build:client": "bun run --cwd packages/client build",
-    "typecheck": "bun run --cwd packages/shared typecheck && bun run --cwd packages/server typecheck && bun run --cwd packages/client typecheck",
+    "typecheck": "bun run --cwd packages/shared typecheck && bun run --cwd packages/server typecheck && bun run --cwd packages/client typecheck && bun run --cwd packages/e2e typecheck",
     "preview": "bun --parallel \"preview:server\" \"preview:client\""
   },
   "devDependencies": {

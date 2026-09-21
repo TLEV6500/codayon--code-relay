@@ -24,7 +24,7 @@ export interface SessionEndedProps {
  */
 export const SessionEnded: Component<SessionEndedProps> = (props) => {
   return (
-    <div class="flex min-h-screen items-center justify-center bg-slate-950 p-6">
+    <div class="flex min-h-screen items-center justify-center bg-slate-950 p-6" data-testid="session-ended-view">
       <div class="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900/80 p-12 shadow-2xl text-center">
         {/* Icon/Status */}
         <div class="mb-6 flex justify-center">
@@ -62,6 +62,7 @@ export const SessionEnded: Component<SessionEndedProps> = (props) => {
         {/* Return to Lobby Button */}
         <button
           class="mt-8 w-full rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-emerald-400 active:bg-emerald-600 transition-colors"
+          data-testid="return-to-lobby"
           onClick={props.onReturnToLobby}
         >
           Return to Lobby

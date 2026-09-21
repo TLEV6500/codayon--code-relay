@@ -1,0 +1,14 @@
+{
+  "name": "@codayon/e2e",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@codayon/client": "workspace:*",
+    "@codayon/server": "workspace:*",
+    "@codayon/shared": "workspace:*"
+  }
+}

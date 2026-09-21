@@ -97,7 +97,7 @@ export const GracePeriodModal: Component<GracePeriodModalProps> = (props) => {
   return (
     <Show when={props.graceState !== null && props.isHostOnly !== false}>
       <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-        <div class="bg-slate-900 border-2 border-red-600/50 rounded-lg p-6 max-w-md w-full mx-4 shadow-2xl">
+        <div class="bg-slate-900 border-2 border-red-600/50 rounded-lg p-6 max-w-md w-full mx-4 shadow-2xl" data-testid="grace-period-modal">
           {/* Header */}
           <div class="flex items-center gap-2 mb-4">
             <div class="w-3 h-3 rounded-full bg-red-500 animate-pulse" />

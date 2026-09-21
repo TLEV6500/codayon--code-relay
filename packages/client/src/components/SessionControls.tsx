@@ -337,10 +337,10 @@ export const SessionControls: Component<SessionControlsProps> = (props) => {
   };
 
   return (
-    <div class="flex flex-col gap-3">
+    <div class="flex flex-col gap-3" data-testid="session-controls">
       {/* Control Rejection Feedback (REQ-036) */}
       <Show when={displayedControlError()}>
-        <div class="border-l-4 border-red-500 bg-red-900/30 rounded-r-lg p-3 animate-in">
+        <div class="border-l-4 border-red-500 bg-red-900/30 rounded-r-lg p-3 animate-in" data-testid="control-rejection-banner">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
               <div class="w-2 h-2 rounded-full bg-red-500" />
@@ -365,7 +365,7 @@ export const SessionControls: Component<SessionControlsProps> = (props) => {
 
       {/* Host Disconnect Indicator (REQ-034, Task 8) */}
       <Show when={hostDisconnected()}>
-        <div class="border-l-4 border-orange-500 bg-orange-900/30 rounded-r-lg p-3">
+        <div class="border-l-4 border-orange-500 bg-orange-900/30 rounded-r-lg p-3" data-testid="host-disconnect-indicator">
           <div class="flex items-center gap-2">
             <div class="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
             <span class="text-sm font-semibold text-orange-300">Host Disconnected</span>
@@ -401,7 +401,7 @@ export const SessionControls: Component<SessionControlsProps> = (props) => {
 
           {/* Manual Driver Picker (REQ-030) */}
           <Show when={shouldShowDriverPicker()}>
-            <div class="mt-3 pt-3 border-t border-slate-700">
+            <div class="mt-3 pt-3 border-t border-slate-700" data-testid="manual-driver-picker">
               <label class="block text-xs font-semibold text-slate-300 mb-2">
                 Choose Next Driver
               </label>
@@ -439,11 +439,12 @@ export const SessionControls: Component<SessionControlsProps> = (props) => {
               <div class="flex flex-col gap-2">
                 <button
                   disabled
+                  data-testid="early-end-button"
                   class="w-full px-3 py-2 bg-slate-700 text-slate-400 font-semibold rounded text-sm cursor-not-allowed opacity-60"
                 >
                   End Turn Early
                 </button>
-                <p class="text-xs text-slate-400 text-center">
+                <p class="text-xs text-slate-400 text-center" data-testid="early-end-disabled-explanation">
                   Early end not enabled for this session
                 </p>
               </div>
@@ -451,6 +452,7 @@ export const SessionControls: Component<SessionControlsProps> = (props) => {
           >
             <button
               onClick={handleEarlyEnd}
+              data-testid="early-end-button"
               class="w-full px-3 py-2 bg-amber-600 hover:bg-amber-500 text-white font-semibold rounded text-sm"
             >
               End Turn Early
@@ -480,17 +482,20 @@ export const SessionControls: Component<SessionControlsProps> = (props) => {
           <Show when={props.turnNumber !== null && props.turnNumber !== undefined}>
             <div class="flex items-center gap-2 px-2 py-1 bg-slate-800/50 rounded">
               <span class="text-slate-500">Turn:</span>
-              <span class="font-semibold text-blue-400">#{props.turnNumber}</span>
+              <span class="font-semibold text-blue-400" data-testid="turn-number">#{props.turnNumber}</span>
               <span class="text-slate-600">•</span>
-              <span class={props.isCurrentDriver ? "font-semibold text-emerald-400" : "text-slate-300"}>
+              <span data-testid="current-driver" class={props.isCurrentDriver ? "font-semibold text-emerald-400" : "text-slate-300"}>
                 {props.isCurrentDriver ? "You are driving" : props.currentDriverName || "—"}
               </span>
+              <Show when={props.isCurrentDriver}>
+                <span data-testid="you-are-driving" class="sr-only">You are driving</span>
+              </Show>
             </div>
           </Show>
           
           {/* Turn countdown timer */}
           <Show when={displayMs() !== null}>
-            <div class="flex items-center gap-2 px-2 py-1 bg-slate-800/50 rounded">
+            <div class="flex items-center gap-2 px-2 py-1 bg-slate-800/50 rounded" data-testid="turn-countdown">
               <span class="text-slate-500">Timer:</span>
               <span class={`font-mono font-semibold ${
                 displayMs()! > 10000 ? "text-emerald-400" :
@@ -525,7 +530,7 @@ export const SessionControls: Component<SessionControlsProps> = (props) => {
         <Show when={shouldShowRotationOrder()}>
           <div class="mt-3 pt-3 border-t border-slate-800">
             <h4 class="text-xs font-semibold text-slate-300 mb-2">Rotation Order</h4>
-            <div class="space-y-1">
+            <div class="space-y-1" data-testid="rotation-order-list">
               {props.rotationOrder?.map((participantId, index) => (
                 <div
                   class={`text-xs px-2 py-1 rounded flex items-center gap-2 ${
@@ -533,6 +538,7 @@ export const SessionControls: Component<SessionControlsProps> = (props) => {
                       ? "bg-blue-900/50 border border-blue-700"
                       : "bg-slate-800/50"
                   }`}
+                  data-testid={index === props.rotationNextIndex ? "rotation-next-up" : undefined}
                 >
                   <span class="text-slate-500 font-mono text-xs w-5">
                     {index + 1}.
@@ -584,7 +590,7 @@ export const SessionControls: Component<SessionControlsProps> = (props) => {
 
       {/* Grace Period Countdown Banner (all participants) */}
       <Show when={props.graceState !== null}>
-        <div class="border-l-4 border-red-500 bg-red-900/20 rounded-r-lg p-3">
+        <div class="border-l-4 border-red-500 bg-red-900/20 rounded-r-lg p-3" data-testid="grace-period-banner">
           <div class="flex items-center justify-between mb-1">
             <div class="flex items-center gap-2">
               <div class="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
