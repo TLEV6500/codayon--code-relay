@@ -216,8 +216,8 @@ function handleDocMessage(
 /**
  * Relays a client's presence (cursor/selection) to the rest of the room
  * (REQ-018.1). The payload is enriched with the sender's participant id + name
- * so peers can label the remote cursor; `ws.publish` excludes the sender, so a
- * client never receives an echo of its own presence.
+ * so peers can label the remote cursor; additionally, the sender receives its
+ * own presence so it can render its own cursor/selection in the editor (UX fix).
  *
  * Presence is transient awareness data kept separate from the authoritative
  * document (REQ-018.3): it is only relayed, never stored.
@@ -241,7 +241,9 @@ function handlePresenceMessage(
     anchor: msg.anchor,
     head: msg.head,
   };
-  // Socket-level publish excludes the sender (REQ-018.1 "all OTHER users").
+  // Send to self so the user can see their own cursor/selection in the editor.
+  send(ws, relayed);
+  // Broadcast to other users (socket-level publish excludes sender by default).
   ws.publish(roomTopic(ws.data.code), JSON.stringify(relayed));
 }
 
