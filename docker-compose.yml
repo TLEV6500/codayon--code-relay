@@ -1,0 +1,60 @@
+networks:
+  codayon:
+    driver: bridge
+
+services:
+  server:
+    profiles: ["dev"]
+    build:
+      context: .
+      dockerfile: docker/server/Dockerfile
+      target: dev
+    environment:
+      PORT: ${SERVER_PORT:-3000}
+    volumes:
+      - ./packages/server/src:/app/packages/server/src
+      - ./packages/shared/src:/app/packages/shared/src
+    ports:
+      - "${SERVER_PORT:-3000}:3000"
+    networks:
+      - codayon
+
+  client:
+    profiles: ["dev"]
+    build:
+      context: .
+      dockerfile: docker/client/Dockerfile
+      target: dev
+    environment:
+      # Docker DNS: resolves to the `server` service on the shared network.
+      # Client dev server always binds to 5173 inside the container;
+      # only the published port is configurable here.
+      VITE_PROXY_TARGET: "http://server:3000"
+    volumes:
+      - ./packages/client/src:/app/packages/client/src
+      - ./packages/shared/src:/app/packages/shared/src
+    ports:
+      - "${CLIENT_PORT:-5173}:5173"
+    depends_on:
+      - server
+    networks:
+      - codayon
+
+  nginx:
+    profiles: ["dev"]
+    image: nginx:1.27-alpine
+    environment:
+      NGINX_PROFILE: "dev"
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/nginx/root.dev.conf:/etc/nginx/root.dev.conf:ro
+      - ./docker/nginx/root.prod.conf:/etc/nginx/root.prod.conf:ro
+      - ./docker/nginx/entrypoint.sh:/entrypoint.sh:ro
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
+    ports:
+      - "${NGINX_PORT:-8080}:80"
+    depends_on:
+      - server
+      - client
+    networks:
+      - codayon
