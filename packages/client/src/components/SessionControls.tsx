@@ -207,6 +207,44 @@ export const SessionControls: Component<SessionControlsProps> = (props) => {
     });
   };
 
+  const handleStartTurnWithDriver = (driverId: string) => {
+    props.connection.send({
+      channel: "control",
+      type: "startTurn",
+      driver: driverId,
+    });
+  };
+
+  /**
+   * Get eligible drivers for manual selection:
+   * - Connected participants only
+   * - Non-spectators (host-participant, observer)
+   * - Exclude current driver if already active turn
+   */
+  const getEligibleDrivers = () => {
+    if (!props.roster) return [];
+    return props.roster.filter(
+      (p) =>
+        p.connected &&
+        (p.role === "observer" || p.role === "host-participant") &&
+        p.id !== props.currentDriver // Don't offer current driver again
+    );
+  };
+
+  /**
+   * Determine if the host should see the manual driver picker.
+   * Visible when:
+   * - Host is not the current driver (only show when not driving)
+   * - Session is active
+   * - Selection policy is manual
+   */
+  const shouldShowDriverPicker = () => {
+    const isManualMode = props.turnConfig?.selectionPolicy === "manual";
+    const isHostNotDriving = props.role === "host" && !props.isCurrentDriver;
+    const isSessionActive = props.sessionPhase === "active";
+    return isManualMode && isHostNotDriving && isSessionActive;
+  };
+
   return (
     <div class="flex flex-col gap-3">
       {/* Host Control Panel */}
@@ -230,6 +268,35 @@ export const SessionControls: Component<SessionControlsProps> = (props) => {
             >
               End Session
             </button>
+          </Show>
+
+          {/* Manual Driver Picker (REQ-030) */}
+          <Show when={shouldShowDriverPicker()}>
+            <div class="mt-3 pt-3 border-t border-slate-700">
+              <label class="block text-xs font-semibold text-slate-300 mb-2">
+                Choose Next Driver
+              </label>
+              <select
+                onChange={(e) => {
+                  if (e.currentTarget.value) {
+                    handleStartTurnWithDriver(e.currentTarget.value);
+                    e.currentTarget.value = ""; // Reset dropdown
+                  }
+                }}
+                value=""
+                class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm"
+              >
+                <option value="">-- Select a driver --</option>
+                {getEligibleDrivers().map((driver) => (
+                  <option value={driver.id}>{driver.name}</option>
+                ))}
+              </select>
+              <Show when={getEligibleDrivers().length === 0}>
+                <p class="text-xs text-slate-500 mt-1">
+                  No eligible drivers available
+                </p>
+              </Show>
+            </div>
           </Show>
         </div>
       </Show>
