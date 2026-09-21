@@ -1,13 +1,15 @@
 #!/bin/sh
 # Selects docker/nginx/root.dev.conf or root.prod.conf as the active `location /`
-# block based on NGINX_PROFILE, then starts nginx normally.
-#
-# Used by both the dev profile (nginx official image + bind-mounted config,
-# see docker-compose.yml) and the prod profile (baked into the nginx image by
-# docker/nginx/Dockerfile).
+# block based on NGINX_PROFILE, and substitutes the upstream server hostname in
+# nginx.conf (from "server" to "server-prod" or vice versa based on profile).
+
 set -eu
 
 profile="${NGINX_PROFILE:-prod}"
+upstream_host="${UPSTREAM_HOST:-server}"
+
+# Substitute the upstream hostname in nginx.conf for all proxy_pass directives.
+sed -i "s|http://server:3000|http://$upstream_host:3000|g" /etc/nginx/nginx.conf
 
 case "$profile" in
   dev)

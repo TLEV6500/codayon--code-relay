@@ -26,9 +26,6 @@ services:
       dockerfile: docker/client/Dockerfile
       target: dev
     environment:
-      # Docker DNS: resolves to the `server` service on the shared network.
-      # Client dev server always binds to 5173 inside the container;
-      # only the published port is configurable here.
       VITE_PROXY_TARGET: "http://server:3000"
     volumes:
       - ./packages/client/src:/app/packages/client/src
@@ -45,6 +42,7 @@ services:
     image: nginx:1.27-alpine
     environment:
       NGINX_PROFILE: "dev"
+      UPSTREAM_HOST: "server"
     volumes:
       - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./docker/nginx/root.dev.conf:/etc/nginx/root.dev.conf:ro
@@ -56,5 +54,31 @@ services:
     depends_on:
       - server
       - client
+    networks:
+      - codayon
+
+  server-prod:
+    profiles: ["prod"]
+    build:
+      context: .
+      dockerfile: docker/server/Dockerfile
+      target: prod
+    environment:
+      PORT: ${SERVER_PORT:-3000}
+    networks:
+      - codayon
+
+  nginx-prod:
+    profiles: ["prod"]
+    build:
+      context: .
+      dockerfile: docker/nginx/Dockerfile
+    environment:
+      NGINX_PROFILE: "prod"
+      UPSTREAM_HOST: "server-prod"
+    ports:
+      - "${NGINX_PORT:-8080}:80"
+    depends_on:
+      - server-prod
     networks:
       - codayon
