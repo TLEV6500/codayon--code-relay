@@ -1,0 +1,26 @@
+{
+  "name": "codayon",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "test": "bun test",
+    "dev:server": "bun run --cwd packages/server dev",
+    "dev:client": "bun run --cwd packages/client dev",
+    "preview:server": "bun run --cwd packages/server start",
+    "preview:client": "bun run --cwd packages/client preview",
+    "build:client": "bun run --cwd packages/client build",
+    "typecheck": "bun run --cwd packages/shared typecheck && bun run --cwd packages/server typecheck && bun run --cwd packages/client typecheck",
+    "preview": "bun --parallel \"preview:server\" \"preview:client\""
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.2",
+    "typescript": "^5.6.3"
+  },
+  "overrides": {
+    "@codemirror/state": "6.7.5"
+  }
+}
