@@ -116,6 +116,38 @@ Each bugfix spec includes:
 
 ---
 
+### 📖 HOST_UX_FLOW: Complete Room & Session Configuration Flow
+
+**File:** `HOST_UX_FLOW.md` (832 lines)
+
+**Purpose:** Comprehensive walkthrough of host experience from room creation to session end
+
+**Covers:**
+- Room creation (Step 1)
+- Session configuration dialog (Step 2)
+- Turn management (Step 3)
+- Real-time feedback (Step 4)
+- Host actions by phase (Step 5)
+- Error handling (Step 6)
+- Complete 5-minute journey (Step 7)
+- UI component states (Step 8)
+- Multi-tab testing (Step 9)
+- Known limitations (Step 10)
+- DevTools verification (Step 11)
+- Accessibility (Step 12)
+- Mobile/responsive (Step 13)
+
+**Complements:** BUGFIX-002 (Missing Host Controls), BUGFIX-004 (Disconnect Indicator)
+
+**Contains:**
+- ASCII UI mockups with exact layout
+- Step-by-step procedures
+- Timeline sequences
+- Error scenarios
+- Cross-references to bugfixes and requirements
+
+---
+
 ### ⏳ BUGFIX-005: Session Auto-Cleanup When No Users Present
 
 **File:** NOT YET DOCUMENTED
@@ -140,13 +172,14 @@ Each bugfix spec includes:
 
 ## Quick Navigation
 
-| Bugfix | Severity | Status | Effort | Commits |
-|--------|----------|--------|--------|---------|
-| [BUGFIX-001](BUGFIX-001-own-cursor-visibility.md) | High | ✅ Fixed | Low | 225df2b |
-| [BUGFIX-002](BUGFIX-002-missing-host-controls.md) | High | ✅ Fixed | High | 8ac97fc, 3a0da18 |
-| [BUGFIX-003](BUGFIX-003-driver-early-end.md) | Medium | ✅ Fixed | Low | 3a0da18 |
-| [BUGFIX-004](BUGFIX-004-host-disconnect-indicator.md) | Medium | ⚠️ Partial | Medium | 3a0da18 |
-| [BUGFIX-005](../INVESTIGATION_REPORT.md#issue-4) | Low | ⏳ Deferred | Low | — |
+| Document | Type | Audience | Purpose |
+|----------|------|----------|---------|
+| [HOST_UX_FLOW.md](HOST_UX_FLOW.md) | UX Flow | Product, Design, QA | Complete host room & session flow |
+| [INDEX.md](INDEX.md) | Index | Everyone | Navigation & summary |
+| [BUGFIX-001](BUGFIX-001-own-cursor-visibility.md) | Spec | Reviewers, Testers | Cursor visibility fix |
+| [BUGFIX-002](BUGFIX-002-missing-host-controls.md) | Spec | Reviewers, Testers | Host controls implementation |
+| [BUGFIX-003](BUGFIX-003-driver-early-end.md) | Spec | Reviewers, Testers | Driver early-end action |
+| [BUGFIX-004](BUGFIX-004-host-disconnect-indicator.md) | Spec | Reviewers, Testers | Roster with connection status |
 
 ---
 
