@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@codayon/shared": "workspace:*",
-    "@codemirror/state": "^6.5.2",
+    "@codemirror/state": "^6.7.5",
     "@codemirror/collab": "^6.1.1",
     "hono": "^4.6.14"
   }

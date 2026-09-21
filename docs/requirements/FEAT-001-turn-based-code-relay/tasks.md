@@ -38,7 +38,7 @@ ending by wiring into the running app. No orphaned code.
   - **Demo:** create a room, join from another client with the code, get a room
     + role; joining a bad code is rejected.
 
-- [ ] **Task 4 — WebSocket connect + authoritative document relay**
+- [x] **Task 4 — WebSocket connect + authoritative document relay**
   - WS upgrade via `server.upgrade(req, { data })`; `open`/`message`/`close` on
     Bun's native handler; subscribe socket to room topic; `getDocument` /
     `pullUpdates` / `pushUpdates` collab authority in-memory; CM6
@@ -46,8 +46,11 @@ ending by wiring into the running app. No orphaned code.
     `rebaseUpdates` on version mismatch. (Any participant may push for now;
     token enforcement lands in Task 6.)
   - **Requirements:** REQ-016, REQ-017; NFR-001.
-  - **Demo:** two browser tabs in the same room; typing in one appears in the
-    other and both converge.
+  - **Verified:** `bun test` 40/40 pass (RoomDoc authority incl. rebase +
+    convergence; WS integration: unknown-token rejection, getDocument snapshot,
+    push broadcast + convergence); typecheck clean; client builds; live
+    entrypoint e2e (create → join → push → peer broadcast → converge to
+    "hello world" @ v1).
 
 - [ ] **Task 5 — Presence channel (cursors/selections)**
   - Broadcast cursor/selection as transient presence on a separate channel;

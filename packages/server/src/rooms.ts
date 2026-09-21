@@ -4,8 +4,9 @@
  * Holds ephemeral session state for the lifetime of the server process only —
  * nothing is persisted (REQ-004.2). Each room bundles:
  *  - the authoritative `SessionState` (from the pure engine),
- *  - the authoritative document baseline (version + text) used to bootstrap
- *    joining peers (REQ-002.4); the live collab history lands in Task 4,
+ *  - the authoritative collaborative document (`RoomDoc`: ordered update
+ *    history + current text) used to order edits and bootstrap peers
+ *    (REQ-002.4, REQ-016/017),
  *  - the secret host-ownership token (REQ-001.1), returned only to the creator.
  *
  * Identity is ephemeral and session-scoped (REQ-003.1). Generators are injected
@@ -21,6 +22,7 @@ import {
   type Role,
   type SessionState,
 } from "@codayon/shared";
+import { RoomDoc } from "./relay";
 
 /** The transient server-side record for a single room/session. */
 export interface Room {
@@ -29,9 +31,8 @@ export interface Room {
   readonly hostToken: string;
   /** Authoritative session model (pure engine state). */
   session: SessionState;
-  /** Authoritative document baseline for bootstrap (collab history added later). */
-  docVersion: number;
-  docText: string;
+  /** Authoritative collaborative document (ordered update history + text). */
+  readonly doc: RoomDoc;
   /** Maps a participant's secret client token to their id (ephemeral). */
   readonly clientTokens: Map<string, ParticipantId>;
 }
@@ -134,8 +135,7 @@ export class RoomRegistry {
       code,
       hostToken,
       session,
-      docVersion: 0,
-      docText: "",
+      doc: new RoomDoc(),
       clientTokens: new Map([[clientToken, hostId]]),
     };
     this.rooms.set(code, room);
@@ -180,9 +180,10 @@ export class RoomRegistry {
       connected: p.connected,
     }));
 
+    const snapshot = room.doc.getDocument();
     return {
-      version: room.docVersion,
-      doc: room.docText,
+      version: snapshot.version,
+      doc: snapshot.doc,
       phase: room.session.phase,
       roster,
     };
