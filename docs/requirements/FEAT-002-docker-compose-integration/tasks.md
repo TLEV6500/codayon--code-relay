@@ -98,9 +98,14 @@ orphaned code.
     exposing `/dist/` for multi-stage `COPY --from=` reference. Build-arg
     `VITE_API_URL` is accepted (default empty, no-op).
 
-- [ ] **Task 8 — docker-compose prod profile wiring: dedicated nginx image + prod stack**
-  - `docker/nginx/Dockerfile`: multi-stage, `COPY --from=` the client's build
-    stage's `dist/` into `/usr/share/nginx/html`, `NGINX_PROFILE=prod` baked
-    in. `prod` Compose profile wiring this nginx image + the Task 6 server
-    `prod` target, no bind mounts, no shared volumes.
+- [x] **Task 8 — docker-compose prod profile wiring: dedicated nginx image + prod stack**
+  - `docker/nginx/Dockerfile`: multi-stage, `COPY --from=` the client's prod
+    stage's `/dist/` into `/usr/share/nginx/html`, with shared config + static
+    routing. `prod` Compose profile (`server-prod` + `nginx-prod`), no bind
+    mounts, no shared volumes. Entrypoint sed's the nginx.conf to swap upstream
+    hostname from `server` (dev) to `server-prod` (prod) at runtime.
   - **Requirements:** REQ-008.2, REQ-009.
+  - **Verified:** `docker compose --profile prod up` brings up 2 containers
+    only (no client dev service, server not published to host); client HTML
+    served as static from nginx; `/health` and `POST /api/rooms` respond via
+    nginx; no bind mounts; full HTTP+API+routing operational.
