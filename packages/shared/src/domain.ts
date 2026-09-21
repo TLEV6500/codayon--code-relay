@@ -43,6 +43,21 @@ export interface TurnConfig {
   readonly selectionPolicy: SelectionPolicy;
 }
 
+/** Active turn state (REQ-009/010/024). */
+export interface Turn {
+  /** Unique turn number, incremented each turn start. */
+  readonly number: number;
+  /** Participant driving this turn (holds the token). */
+  readonly driverId: ParticipantId;
+  /** Timestamp when turn started (server-side). */
+  readonly startedAt: number;
+  /**
+   * Whether the turn has ended. Race guard for early-end vs timer expiry (REQ-024).
+   * Used to ensure exactly-one turn-end resolution.
+   */
+  readonly ended: boolean;
+}
+
 /** A connected attendee and their session-scoped attributes. */
 export interface Participant {
   readonly id: ParticipantId;
@@ -76,4 +91,9 @@ export interface SessionState {
    * Never granted to a spectator (REQ-012.2, REQ-006.2).
    */
   readonly editTokenHolder: ParticipantId | null;
+  /**
+   * The currently active turn, or null if no turn is in progress (REQ-009.1/2).
+   * When a turn is active, editTokenHolder should equal turn.driverId.
+   */
+  readonly currentTurn: Turn | null;
 }

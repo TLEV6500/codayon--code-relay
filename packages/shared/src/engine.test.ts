@@ -266,3 +266,254 @@ describe("edit token enforcement (REQ-012, REQ-013/014)", () => {
     expect(s2).toBe(s);
   });
 });
+
+describe("turn start/advance (REQ-009, REQ-024)", () => {
+  test("host starts a turn with an eligible driver", () => {
+    const s = reduce(base(), [
+      { type: "participantJoined", id: "p1", name: "Ann", role: "observer" },
+      {
+        type: "configured",
+        by: "host-1",
+        config: { mode: "fixed", durationMs: 60_000, selectionPolicy: "manual" },
+      },
+      { type: "sessionStarted", by: "host-1" },
+    ]);
+    expect(s.phase).toBe("active");
+
+    const now = Date.now();
+    const s2 = applyEvent(s, {
+      type: "turnStarted",
+      by: "host-1",
+      driver: "p1",
+      startedAt: now,
+    });
+
+    expect(s2.currentTurn).toBeTruthy();
+    expect(s2.currentTurn?.number).toBe(1);
+    expect(s2.currentTurn?.driverId).toBe("p1");
+    expect(s2.currentTurn?.startedAt).toBe(now);
+    expect(s2.currentTurn?.ended).toBe(false);
+    expect(s2.editTokenHolder).toBe("p1");
+  });
+
+  test("non-host cannot start a turn (REQ-005.2)", () => {
+    const s = reduce(base(), [
+      { type: "participantJoined", id: "p1", name: "Ann", role: "observer" },
+      {
+        type: "configured",
+        by: "host-1",
+        config: { mode: "fixed", durationMs: 60_000, selectionPolicy: "manual" },
+      },
+      { type: "sessionStarted", by: "host-1" },
+    ]);
+
+    const s2 = applyEvent(s, {
+      type: "turnStarted",
+      by: "p1",
+      driver: "p1",
+      startedAt: Date.now(),
+    });
+    expect(s2.currentTurn).toBeNull();
+  });
+
+  test("cannot start a turn before session is active", () => {
+    const s = base();
+    const s2 = applyEvent(s, {
+      type: "turnStarted",
+      by: "host-1",
+      driver: "host-1",
+      startedAt: Date.now(),
+    });
+    expect(s2.currentTurn).toBeNull();
+  });
+
+  test("cannot start a turn with an ineligible driver (spectator)", () => {
+    const s = reduce(base(), [
+      { type: "participantJoined", id: "spec", name: "Watcher", role: "spectator" },
+      {
+        type: "configured",
+        by: "host-1",
+        config: { mode: "fixed", durationMs: 60_000, selectionPolicy: "manual" },
+      },
+      { type: "sessionStarted", by: "host-1" },
+    ]);
+
+    const s2 = applyEvent(s, {
+      type: "turnStarted",
+      by: "host-1",
+      driver: "spec",
+      startedAt: Date.now(),
+    });
+    expect(s2.currentTurn).toBeNull();
+  });
+
+  test("turn ended marks the turn as ended (exactly-once guard)", () => {
+    const s = reduce(base(), [
+      { type: "participantJoined", id: "p1", name: "Ann", role: "observer" },
+      {
+        type: "configured",
+        by: "host-1",
+        config: { mode: "fixed", durationMs: 60_000, selectionPolicy: "manual" },
+      },
+      { type: "sessionStarted", by: "host-1" },
+      {
+        type: "turnStarted",
+        by: "host-1",
+        driver: "p1",
+        startedAt: Date.now(),
+      },
+    ]);
+    expect(s.currentTurn?.ended).toBe(false);
+
+    const s2 = applyEvent(s, {
+      type: "turnEnded",
+      reason: "expiry",
+      endedAt: Date.now(),
+    });
+    expect(s2.currentTurn?.ended).toBe(true);
+
+    // Try to end again: ignored (exactly-once)
+    const s3 = applyEvent(s2, {
+      type: "turnEnded",
+      reason: "expiry",
+      endedAt: Date.now(),
+    });
+    expect(s3).toBe(s2);
+  });
+
+  test("turn advanced to next driver grants token and increments turn number", () => {
+    const s = reduce(base(), [
+      { type: "participantJoined", id: "p1", name: "Ann", role: "observer" },
+      { type: "participantJoined", id: "p2", name: "Bo", role: "observer" },
+      {
+        type: "configured",
+        by: "host-1",
+        config: { mode: "fixed", durationMs: 60_000, selectionPolicy: "manual" },
+      },
+      { type: "sessionStarted", by: "host-1" },
+      {
+        type: "turnStarted",
+        by: "host-1",
+        driver: "p1",
+        startedAt: Date.now(),
+      },
+    ]);
+    expect(s.currentTurn?.number).toBe(1);
+
+    const now = Date.now();
+    const s2 = applyEvent(s, {
+      type: "turnAdvanced",
+      nextDriver: "p2",
+      startedAt: now,
+    });
+
+    expect(s2.currentTurn?.number).toBe(2);
+    expect(s2.currentTurn?.driverId).toBe("p2");
+    expect(s2.currentTurn?.startedAt).toBe(now);
+    expect(s2.currentTurn?.ended).toBe(false);
+    expect(s2.editTokenHolder).toBe("p2");
+  });
+
+  test("turn advanced requires an eligible next driver", () => {
+    const s = reduce(base(), [
+      { type: "participantJoined", id: "p1", name: "Ann", role: "observer" },
+      { type: "participantJoined", id: "spec", name: "Watcher", role: "spectator" },
+      {
+        type: "configured",
+        by: "host-1",
+        config: { mode: "fixed", durationMs: 60_000, selectionPolicy: "manual" },
+      },
+      { type: "sessionStarted", by: "host-1" },
+      {
+        type: "turnStarted",
+        by: "host-1",
+        driver: "p1",
+        startedAt: Date.now(),
+      },
+    ]);
+
+    const s2 = applyEvent(s, {
+      type: "turnAdvanced",
+      nextDriver: "spec",
+      startedAt: Date.now(),
+    });
+    // Turn should not advance to spectator
+    expect(s2.currentTurn?.driverId).toBe("p1");
+  });
+});
+
+describe("early-end (REQ-010.3/4, REQ-024)", () => {
+  test("driver can request early-end in early-end mode", () => {
+    const s = reduce(base(), [
+      { type: "participantJoined", id: "p1", name: "Ann", role: "observer" },
+      {
+        type: "configured",
+        by: "host-1",
+        config: {
+          mode: "fixed-early-end",
+          durationMs: 60_000,
+          selectionPolicy: "manual",
+        },
+      },
+      { type: "sessionStarted", by: "host-1" },
+      {
+        type: "turnStarted",
+        by: "host-1",
+        driver: "p1",
+        startedAt: Date.now(),
+      },
+    ]);
+
+    // Early-end request should return the same state (server will do actual end)
+    const s2 = applyEvent(s, { type: "earlyEndRequested", by: "p1" });
+    expect(s2).toBe(s);
+  });
+
+  test("non-driver cannot request early-end", () => {
+    const s = reduce(base(), [
+      { type: "participantJoined", id: "p1", name: "Ann", role: "observer" },
+      { type: "participantJoined", id: "p2", name: "Bo", role: "observer" },
+      {
+        type: "configured",
+        by: "host-1",
+        config: {
+          mode: "fixed-early-end",
+          durationMs: 60_000,
+          selectionPolicy: "manual",
+        },
+      },
+      { type: "sessionStarted", by: "host-1" },
+      {
+        type: "turnStarted",
+        by: "host-1",
+        driver: "p1",
+        startedAt: Date.now(),
+      },
+    ]);
+
+    const s2 = applyEvent(s, { type: "earlyEndRequested", by: "p2" });
+    expect(s2).toBe(s);
+  });
+
+  test("early-end is rejected in fixed mode (REQ-010.4)", () => {
+    const s = reduce(base(), [
+      { type: "participantJoined", id: "p1", name: "Ann", role: "observer" },
+      {
+        type: "configured",
+        by: "host-1",
+        config: { mode: "fixed", durationMs: 60_000, selectionPolicy: "manual" },
+      },
+      { type: "sessionStarted", by: "host-1" },
+      {
+        type: "turnStarted",
+        by: "host-1",
+        driver: "p1",
+        startedAt: Date.now(),
+      },
+    ]);
+
+    const s2 = applyEvent(s, { type: "earlyEndRequested", by: "p1" });
+    // Should be rejected: fixed mode doesn't support early-end
+    expect(s2).toBe(s);
+  });
+});

@@ -83,6 +83,19 @@ export interface EndSessionMsg {
   readonly type: "endSession";
 }
 
+/** Host: start a turn with a chosen driver (REQ-009.1, Task 7). */
+export interface StartTurnMsg {
+  readonly channel: "control";
+  readonly type: "startTurn";
+  readonly driver: ParticipantId;
+}
+
+/** Driver: request to end their turn early (REQ-010.3, Task 7). */
+export interface EarlyEndMsg {
+  readonly channel: "control";
+  readonly type: "earlyEnd";
+}
+
 export type ClientMessage =
   | GetDocumentMsg
   | PullUpdatesMsg
@@ -90,7 +103,9 @@ export type ClientMessage =
   | PresenceUpdateMsg
   | ConfigureMsg
   | StartSessionMsg
-  | EndSessionMsg;
+  | EndSessionMsg
+  | StartTurnMsg
+  | EarlyEndMsg;
 
 // ---------------------------------------------------------------------------
 // Server -> Client
@@ -171,6 +186,31 @@ export interface ControlRejectedMsg {
   readonly reason: "not-host" | "not-configured" | "invalid-state";
 }
 
+/** Turn started; new driver has the token (REQ-009.1, Task 7). */
+export interface TurnStartedMsg {
+  readonly channel: "control";
+  readonly type: "turnStarted";
+  readonly turnNumber: number;
+  readonly driver: ParticipantId;
+  readonly driverName: string;
+  readonly startedAt: number;
+}
+
+/** Turn ended; next turn beginning or turn ended (REQ-009.3, Task 7). */
+export interface TurnEndedMsg {
+  readonly channel: "control";
+  readonly type: "turnEnded";
+  readonly reason: "expiry" | "early-end" | "host-action";
+  readonly endedAt: number;
+}
+
+/** Timer tick broadcast (REQ-010.1, Task 7). */
+export interface TimerTickMsg {
+  readonly channel: "control";
+  readonly type: "timerTick";
+  readonly remainingMs: number;
+}
+
 export type ServerMessage =
   | DocumentMsg
   | UpdatesMsg
@@ -180,4 +220,7 @@ export type ServerMessage =
   | RoleAssignedMsg
   | SessionSnapshotMsg
   | SessionEndedMsg
-  | ControlRejectedMsg;
+  | ControlRejectedMsg
+  | TurnStartedMsg
+  | TurnEndedMsg
+  | TimerTickMsg;

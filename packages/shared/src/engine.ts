@@ -17,6 +17,7 @@ import type {
   ParticipantId,
   Role,
   SessionState,
+  Turn,
   TurnConfig,
 } from "./domain";
 
@@ -51,6 +52,26 @@ export type EngineEvent =
   | {
       readonly type: "tokenRevoked";
       readonly from: ParticipantId;
+    }
+  | {
+      readonly type: "turnStarted";
+      readonly by: ParticipantId;
+      readonly driver: ParticipantId;
+      readonly startedAt: number;
+    }
+  | {
+      readonly type: "turnEnded";
+      readonly reason: "expiry" | "early-end" | "host-action";
+      readonly endedAt: number;
+    }
+  | {
+      readonly type: "turnAdvanced";
+      readonly nextDriver: ParticipantId;
+      readonly startedAt: number;
+    }
+  | {
+      readonly type: "earlyEndRequested";
+      readonly by: ParticipantId;
     };
 
 export interface CreateSessionInput {
@@ -76,6 +97,7 @@ export function createSession(input: CreateSessionInput): SessionState {
     turnConfig: null,
     participants: new Map([[host.id, host]]),
     editTokenHolder: null,
+    currentTurn: null,
   };
 }
 
@@ -192,6 +214,70 @@ export function applyEvent(state: SessionState, event: EngineEvent): SessionStat
       // Revoke only if they currently hold it (REQ-012.3).
       if (state.editTokenHolder !== event.from) return state;
       return { ...state, editTokenHolder: null };
+    }
+
+    case "turnStarted": {
+      // Only the host may start a turn (REQ-005.1).
+      if (!isHost(state, event.by)) return state;
+      // Session must be active and configured (REQ-007.3, REQ-009.1).
+      if (state.phase !== "active" || !state.turnConfig) return state;
+      // The driver must be eligible (REQ-012.2).
+      if (!isEligibleForToken(state, event.driver)) return state;
+
+      // Create a new turn and grant the token to the driver (REQ-009.1).
+      const newTurn: Turn = {
+        number: (state.currentTurn?.number ?? 0) + 1,
+        driverId: event.driver,
+        startedAt: event.startedAt,
+        ended: false,
+      };
+
+      return {
+        ...state,
+        currentTurn: newTurn,
+        editTokenHolder: event.driver,
+      };
+    }
+
+    case "turnEnded": {
+      // Exactly-one turn-end resolution (REQ-024): guard against double-end.
+      if (!state.currentTurn || state.currentTurn.ended) return state;
+
+      // Mark the turn as ended.
+      return {
+        ...state,
+        currentTurn: { ...state.currentTurn, ended: true },
+      };
+    }
+
+    case "turnAdvanced": {
+      // Advance to the next driver after a turn ends (REQ-009.3).
+      // The next driver must be eligible (REQ-012.2).
+      if (!isEligibleForToken(state, event.nextDriver)) return state;
+
+      // Create a new turn for the next driver.
+      const newTurn: Turn = {
+        number: (state.currentTurn?.number ?? 0) + 1,
+        driverId: event.nextDriver,
+        startedAt: event.startedAt,
+        ended: false,
+      };
+
+      return {
+        ...state,
+        currentTurn: newTurn,
+        editTokenHolder: event.nextDriver,
+      };
+    }
+
+    case "earlyEndRequested": {
+      // Only the current driver can request early-end (REQ-010.3/4).
+      if (!state.currentTurn || state.currentTurn.driverId !== event.by) return state;
+      // Early-end is only allowed in early-end mode (REQ-010.4).
+      if (state.turnConfig?.mode !== "fixed-early-end") return state;
+      // The server will handle the actual turn end; this is just validation.
+      // Return the state unchanged; the server drives the turnEnded event.
+      return state;
     }
 
     default: {
