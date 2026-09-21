@@ -68,7 +68,13 @@ function getControlRejectionMessage(reason: "not-host" | "not-configured" | "inv
 export const RoomEditor: Component<RoomEditorProps> = (props) => {
   let host!: HTMLDivElement;
   let view: EditorView | undefined;
-  let connection: RelayConnection | undefined;
+  // NOTE: tracked as a signal (not a plain `let`) so the SessionControls
+  // render below actually re-renders once the async connectRelay() in
+  // onMount resolves. A plain `let` is invisible to Solid's reactivity:
+  // the JSX below would evaluate `connection && (...)` exactly once during
+  // the initial synchronous render (when it's still undefined) and never
+  // re-run, permanently hiding SessionControls (see FEAT-004 motivation).
+  const [connection, setConnection] = createSignal<RelayConnection | undefined>(undefined);
   const [language, setLanguage] = createSignal<LanguageName>("typescript");
   let languageCompartment: Compartment;
 
@@ -110,10 +116,11 @@ export const RoomEditor: Component<RoomEditorProps> = (props) => {
 
   onMount(async () => {
     const boot = await bootstrapRoom(props.code, props.clientToken);
-    connection = await connectRelay({
+    const conn = await connectRelay({
       code: props.code,
       clientToken: props.clientToken,
     });
+    setConnection(conn);
 
     // Set initial session state from bootstrap
     setSessionPhase(boot.phase);
@@ -125,7 +132,7 @@ export const RoomEditor: Component<RoomEditorProps> = (props) => {
     }
 
     // Subscribe to session/turn updates
-    connection.onMessage((msg: ServerMessage) => {
+    conn.onMessage((msg: ServerMessage) => {
       if (msg.channel === "control") {
         if (msg.type === "roleAssigned") {
           // Role confirmation on join/reconnect (REQ-035)
@@ -210,8 +217,8 @@ export const RoomEditor: Component<RoomEditorProps> = (props) => {
         }),
         EditorView.editable.of(true),
         languageCompartment.of(getLanguageExtension(language())),
-        peerExtension(boot.version, props.clientID, connection),
-        presenceExtension(connection),
+        peerExtension(boot.version, props.clientID, conn),
+        presenceExtension(conn),
       ],
     });
 
@@ -229,7 +236,7 @@ export const RoomEditor: Component<RoomEditorProps> = (props) => {
 
   onCleanup(() => {
     view?.destroy();
-    connection?.close();
+    connection()?.close();
   });
 
   return (
@@ -254,12 +261,12 @@ export const RoomEditor: Component<RoomEditorProps> = (props) => {
 
         {/* Session controls (right side) */}
         <div class="ml-auto">
-          {connection && (
+          {connection() && (
             <SessionControls
               code={props.code}
-              role={props.role}
+              role={role()}
               clientID={props.clientID}
-              connection={connection}
+              connection={connection()!}
               sessionPhase={sessionPhase()}
               turnConfig={turnConfig()}
               isCurrentDriver={currentDriver() === props.clientID}
