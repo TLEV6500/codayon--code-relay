@@ -9,3 +9,7 @@ build/
 bun.lockb
 coverage/
 *.tsbuildinfo
+
+# Temporary task implementation summary files (should not be committed)
+FEAT-003-TASK-*.md
+TASK-*-IMPLEMENTATION.md
