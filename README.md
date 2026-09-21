@@ -288,6 +288,16 @@ Future: add Railway deployment templates (`railway.json`, `railway.toml`).
 
 See `docs/requirements/FEAT-001-turn-based-code-relay/` and `docs/requirements/FEAT-002-docker-compose-integration/` for detailed requirements, design decisions, and task breakdowns.
 
+### For Reviewers: Bugfix Documentation
+
+Fixes for UX/session-management gaps (own-cursor visibility, host admin controls, driver early-end, host disconnect indicator) are documented in `docs/bugfixes/`:
+
+- `docs/bugfixes/INDEX.md` — navigation, summary table, test results, commit history
+- `docs/bugfixes/BUGFIX-001-own-cursor-visibility.md` through `BUGFIX-004-host-disconnect-indicator.md` — per-fix root cause, solution, tests, requirements compliance
+- `docs/bugfixes/HOST_UX_FLOW.md` — end-to-end walkthrough of the host experience (room creation → configuration → turn management → session end)
+
+Use `docs/bugfixes/INDEX.md` as the entry point; it supersedes the root-level investigation/summary notes from the initial analysis pass.
+
 ## License
 
 MIT (or your chosen license)
