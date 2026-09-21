@@ -148,6 +148,42 @@ function isHost(state: SessionState, actor: ParticipantId): boolean {
   return actor === state.hostId;
 }
 
+/**
+ * Find the next connected eligible driver starting from nextIndex (REQ-021: skip disconnected).
+ * Returns the first connected participant who:
+ * - is in the rotation order
+ * - is currently connected
+ * - is eligible for the token
+ * If no connected eligible participant exists, returns null.
+ *
+ * Used by Task 11 (non-driver disconnect/rejoin) server integration to skip
+ * disconnected observers during turn advancement.
+ */
+export function findNextConnectedDriver(
+  state: SessionState,
+): { driver: ParticipantId; index: number } | null {
+  if (!state.rotation) return null;
+
+  const order = state.rotation.order;
+  if (order.length === 0) return null;
+
+  // Start searching from nextIndex, wrapping around
+  for (let i = 0; i < order.length; i++) {
+    const idx = (state.rotation.nextIndex + i) % order.length;
+    const candidateId = order[idx];
+    if (candidateId === undefined) continue;
+
+    const candidate = state.participants.get(candidateId);
+
+    // Check if connected and eligible (REQ-021: skip disconnected)
+    if (candidate && candidate.connected && isEligibleForToken(state, candidateId)) {
+      return { driver: candidateId, index: idx };
+    }
+  }
+
+  return null;
+}
+
 function withParticipants(
   state: SessionState,
   participants: ReadonlyMap<ParticipantId, Participant>,
