@@ -2,24 +2,26 @@
 
 **Document:** Comprehensive host user experience for room creation and session setup  
 **Branch:** `fix/ux-actions-and-presence`  
-**Status:** Complements BUGFIX-002 and BUGFIX-004 · **Some sections describe target/future UI, not current behavior — see note below**  
+**Status:** Complements BUGFIX-002 and BUGFIX-004 · **Part 8's "State 2: Active Phase" and "State 3: Ended Phase" describe target UI states, not current behavior**  
 **Target Audience:** Product, Design, QA, Developers
 
-> **⚠️ Verification note (added during FEAT-003 scoping, 2026-09-21):**
-> This document was checked against the actual client code
-> (`RoomEditor.tsx`, `SessionControls.tsx`, `App.tsx`). **Part 8's "State 2:
-> Active Phase" and "State 3: Ended Phase" mockups are not implemented** —
-> there is no rendered turn timer/countdown, no "Current Driver" readout,
-> and no "Session Ended" / "Return to Lobby" screen anywhere in the client
-> today. Part 3 (Turn Management) and Part 9 (Multi-Tab Testing) similarly
-> describe timer displays and manual-driver-assignment UI that do not exist
-> yet (consistent with this document's own Part 10 "Known Limitations",
-> which correctly lists these as "❌ Not Implemented"). These gaps are now
-> formally tracked and scoped in
-> `docs/requirements/FEAT-003-session-ux-completion/` (REQ-026/027 for the
-> timer, REQ-028 for driver display, REQ-030 for manual assignment, REQ-037
-> for the session-ended screen). Treat the mockups below as **target UX**
-> for that feature's implementation, not a description of what exists now.
+> **⚠️ Implementation Status Note (updated 2026-09-22):**
+> This document's Part 8 describes the target UI for session management.
+> **State 2 (Active Phase)** and **State 3 (Ended Phase)** with turn timers,
+> current driver readout, and session-ended screen are **now implemented in
+> FEAT-003** (see `docs/requirements/FEAT-003-session-ux-completion/`).
+> Specifically:
+> - **Turn timer countdown display** → FEAT-003 Task 2 (REQ-027)
+> - **Current Driver display** → FEAT-003 Task 3 (REQ-028, REQ-029)
+> - **Manual driver assignment UI** → FEAT-003 Task 4 (REQ-030)
+> - **Rotation order visibility** → FEAT-003 Task 5 (REQ-026)
+> - **Disconnect grace period UX** → FEAT-003 Task 6 (REQ-032, REQ-033)
+> - **Host-specific disconnect indicator** → FEAT-003 Task 7 (REQ-034)
+> - **Session-ended screen** → FEAT-003 Task 11 (REQ-037)
+>
+> Parts 1-7 of this flow (Room Creation through Complete Host Journey) describe
+> **current behavior**; Part 8 onward should be read as **target/implemented UX**
+> for FEAT-003.
 
 ---
 
@@ -631,9 +633,12 @@ T+5:00  Host decides to end session
 
 ## Part 8: UI Component States
 
-> **Note:** "State 2" and "State 3" below describe **target UI, not yet
-> implemented** (see verification note at top of document). Tracked as
-> FEAT-003 Tasks 2, 3, and 11.
+> **Note:** The mockups below for "State 2: Active Phase" and "State 3: Ended
+> Phase" represent **target UI implemented in FEAT-003**, not current behavior.
+> Turn timers, current driver readouts, and session-ended screens are part of
+> FEAT-003 scope and are now **integrated into the client** (Tasks 2, 3, 11,
+> and related Tasks 5-7). State 1 (Created Phase) is current; States 2-3 are
+> now implemented.
 
 ### Host Controls Panel States
 

@@ -1,6 +1,6 @@
 # BUGFIX-004: No Visual Indicator When Host Leaves Session
 
-**Status:** ✅ Baseline shipped · Remaining scope reclassified as feature work → see **FEAT-003**  
+**Status:** ✅ Baseline shipped · Remaining scope now in FEAT-003 (REQ-034)  
 **Branch:** `fix/ux-actions-and-presence`  
 **Commits:** `3a0da18` (roster component)  
 **Severity:** Medium (UX Clarity)  
@@ -14,9 +14,12 @@
 > server-side presence broadcast and session-coherence handling, not a
 > specific client UI. This item was therefore **not a regression/bug**, but
 > unbuilt UI/UX surface area for an already-implemented server capability.
-> Its deferred scope (host-specific visual distinction, auto-notification,
-> grace-period modal) is now tracked as REQ-032/033/034 in FEAT-003, alongside
-> a broader audit of similar server-complete/UI-incomplete gaps. This document
+> 
+> **Host-specific visual distinction** (host shown differently from other
+> disconnected participants) is now formally tracked as **REQ-034 in FEAT-003**
+> and scheduled for implementation alongside a broader audit of similar
+> server-complete/UI-incomplete gaps (turn timer, driver visibility, manual
+> driver assignment, grace period UX, session-ended feedback). This document
 > is retained for historical record of the original investigation and the
 > baseline that shipped from it.
 
@@ -500,8 +503,9 @@ Alternative considered:
 - **BUGFIX-005** — nginx CRLF entrypoint crash (Docker Compose stack outage)
 - **BUGFIX-006** (Future) — Session auto-cleanup when all disconnect
 - **FEAT-003** — Session UI/UX Completion. Formally tracks this document's
-  deferred scope (host-specific disconnect indicator → REQ-034,
-  auto-notification & grace-period UI → REQ-032/033) as feature work,
-  alongside a broader audit of server-complete/UI-incomplete gaps. See
-  `docs/requirements/FEAT-003-session-ux-completion/requirements.md` §1.2,
-  §6.
+  deferred scope as feature work, now implemented in FEAT-003:
+  - Task 6: Disconnect Grace Period UX (REQ-032, REQ-033)
+  - Task 7: Host-Specific Disconnect Indicator (REQ-034)
+  - Task 8: Rotation Order & Driver Visibility (REQ-028, REQ-029, REQ-030)
+  - Alongside broader audit of server-complete/UI-incomplete gaps
+  See `docs/requirements/FEAT-003-session-ux-completion/requirements.md`.
