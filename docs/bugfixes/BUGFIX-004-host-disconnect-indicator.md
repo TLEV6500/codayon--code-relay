@@ -1,10 +1,24 @@
 # BUGFIX-004: No Visual Indicator When Host Leaves Session
 
-**Status:** ⚠️ PARTIALLY FIXED  
+**Status:** ✅ Baseline shipped · Remaining scope reclassified as feature work → see **FEAT-003**  
 **Branch:** `fix/ux-actions-and-presence`  
 **Commits:** `3a0da18` (roster component)  
 **Severity:** Medium (UX Clarity)  
 **Impact:** Users unaware of host departure
+
+> **Reclassification note (see `docs/requirements/FEAT-003-session-ux-completion/`):**
+> The generic roster with per-participant connected/disconnected dots shipped
+> in commit `3a0da18` and is retained as-is (baseline). Investigation during
+> FEAT-003 scoping determined that no FEAT-001 requirement mandates a
+> client-side "host disconnected" indicator — REQ-018/021/022 only require
+> server-side presence broadcast and session-coherence handling, not a
+> specific client UI. This item was therefore **not a regression/bug**, but
+> unbuilt UI/UX surface area for an already-implemented server capability.
+> Its deferred scope (host-specific visual distinction, auto-notification,
+> grace-period modal) is now tracked as REQ-032/033/034 in FEAT-003, alongside
+> a broader audit of similar server-complete/UI-incomplete gaps. This document
+> is retained for historical record of the original investigation and the
+> baseline that shipped from it.
 
 ---
 
@@ -472,10 +486,11 @@ Alternative considered:
 
 | Role | Status | Date |
 |------|--------|------|
-| Developer | ✅ Ready | 2026-09-21 |
+| Developer | ✅ Baseline shipped | 2026-09-21 |
 | Tests | ✅ Passing (78/78) | 2026-09-21 |
 | Review | ⏳ Pending | — |
 | QA | ⏳ Pending | — |
+| Scope reclassification | ✅ Remaining scope moved to FEAT-003 | 2026-09-21 |
 
 ---
 
@@ -484,5 +499,9 @@ Alternative considered:
 - **BUGFIX-002** — Control channel enables SessionSnapshotMsg
 - **BUGFIX-005** — nginx CRLF entrypoint crash (Docker Compose stack outage)
 - **BUGFIX-006** (Future) — Session auto-cleanup when all disconnect
-- **Task: Grace Period UI** — Driver disconnect visual feedback
-- **Task: Connection History** — Log of participant activity
+- **FEAT-003** — Session UI/UX Completion. Formally tracks this document's
+  deferred scope (host-specific disconnect indicator → REQ-034,
+  auto-notification & grace-period UI → REQ-032/033) as feature work,
+  alongside a broader audit of server-complete/UI-incomplete gaps. See
+  `docs/requirements/FEAT-003-session-ux-completion/requirements.md` §1.2,
+  §6.

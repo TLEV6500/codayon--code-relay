@@ -35,6 +35,20 @@ Production-ready containerization with dev/prod orchestration:
 - **Railway-compatible** — each Dockerfile runs standalone; services deployable as individual Railway services later
 - **Configurable** — `.env.example` with port/env var defaults, `.env` (gitignored) for overrides
 
+### FEAT-003: Session UI/UX Completion (In Progress)
+
+Closes gaps between server-modeled capabilities and the client UI — features that were already implemented in the turn engine/protocol but never surfaced to users:
+
+- **Turn timer end-to-end** — server-side scheduler auto-expires fixed-duration turns and broadcasts a live countdown (previously: turns never ended automatically; only manual/early-end worked)
+- **Driver & turn visibility** — current driver name and turn number shown to all participants
+- **Manual driver assignment UI** — host picker to choose the next driver by name (manual selection policy)
+- **Rotation order visibility** — round-robin order and "who's up next" shown to all participants
+- **Disconnect grace period UX** — visible countdown for all users + host reassign/extend/skip actions when a driver or host disconnects mid-turn
+- **Host-specific disconnect indicator** — distinct, always-visible signal when the host (not just any participant) disconnects
+- **Control rejection & session-ended feedback** — clear, human-readable feedback instead of silent failures or a frozen editor
+
+See `docs/requirements/FEAT-003-session-ux-completion/` for the full gap audit, requirements, and design.
+
 ## Quick Start
 
 ### Prerequisites
@@ -172,10 +186,14 @@ Access at `http://localhost:9000`.
         │   ├── requirements.md   # User stories, acceptance criteria (EARS)
         │   ├── design.md         # Approved tech decisions, architecture
         │   └── tasks.md          # Implementation task breakdown
-        └── FEAT-002-docker-compose-integration/
-            ├── requirements.md   # Docker/compose requirements (EARS)
-            ├── design.md         # Multi-stage, same-origin routing, Railway compatibility
-            └── tasks.md          # 8 tasks: Dockerfiles, compose profiles, prod wiring
+        ├── FEAT-002-docker-compose-integration/
+        │   ├── requirements.md   # Docker/compose requirements (EARS)
+        │   ├── design.md         # Multi-stage, same-origin routing, Railway compatibility
+        │   └── tasks.md          # 8 tasks: Dockerfiles, compose profiles, prod wiring
+        └── FEAT-003-session-ux-completion/
+            ├── requirements.md   # UI/UX gap audit + requirements (EARS)
+            ├── design.md         # Turn scheduler, protocol additions, component plan
+            └── tasks.md          # 13 tasks: timer, driver/rotation visibility, grace period UX
 ```
 
 ## Architecture

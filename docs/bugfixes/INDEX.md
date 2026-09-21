@@ -2,7 +2,15 @@
 
 **Branch:** `fix/ux-actions-and-presence`  
 **Date:** September 21, 2026  
-**Status:** 4 Bugfixes documented, 3 fully fixed, 1 partially fixed
+**Status:** 4 Bugfixes documented, 4 fully fixed at baseline scope, 1 nginx crash fixed (BUGFIX-005), 1 deferred (BUGFIX-006)
+
+> **See also:** `docs/requirements/FEAT-003-session-ux-completion/` — BUGFIX-004's
+> deferred scope (host-specific disconnect indicator, grace-period UI,
+> auto-notification) was determined to be unbuilt feature surface area rather
+> than a bug (no FEAT-001 requirement mandated it), and is now tracked there
+> alongside a broader audit of server-complete/client-incomplete UX gaps
+> (turn timer, driver visibility, rotation order, manual driver picker,
+> control-rejection feedback, session-ended teardown).
 
 ---
 
@@ -88,7 +96,7 @@ Each bugfix spec includes:
 
 ---
 
-### ⚠️ BUGFIX-004: No Visual Indicator When Host Leaves Session
+### ✅ BUGFIX-004: No Visual Indicator When Host Leaves Session (baseline) — remaining scope → FEAT-003
 
 **File:** `BUGFIX-004-host-disconnect-indicator.md`
 
@@ -101,18 +109,22 @@ Each bugfix spec includes:
 **Impact:** Medium (UX clarity)  
 **Complexity:** Medium  
 **Commits:** `3a0da18`  
-**Status:** ⚠️ Partially Fixed (roster visible, but no auto-notification)
+**Status:** ✅ Baseline shipped (generic roster). Remaining scope (host-specific
+indicator, auto-notification, grace-period modal) reclassified as feature
+work — not a bug, since no FEAT-001 requirement mandated this client UI —
+and is now tracked as `docs/requirements/FEAT-003-session-ux-completion/`
+(REQ-032/033/034).
 
 **Key Changes:**
 - `RoomEditor.tsx`: Subscribe to SessionSnapshotMsg, track roster
 - `SessionControls.tsx`: Display collapsible roster with connection indicators
 - Green dot = connected, red dot = disconnected
 
-**Deferred Enhancements:**
-- Auto-notification popup
-- Special host visual distinction
-- Driver disconnect grace period UI
-- Connection history log
+**Reclassified to FEAT-003 (see `docs/requirements/FEAT-003-session-ux-completion/`):**
+- Host-specific visual distinction (REQ-034)
+- Auto-notification popup (REQ-032/033)
+- Driver disconnect grace period UI (REQ-032/033)
+- Connection history log (noted as future enhancement, still not required)
 
 ---
 
