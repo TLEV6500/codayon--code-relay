@@ -28,11 +28,17 @@
 import type { Server, ServerWebSocket } from "bun";
 import {
   applyEvent,
+  findNextConnectedDriver,
   type ClientMessage,
   type ParticipantId,
   type ServerMessage,
 } from "@codayon/shared";
 import type { RoomRegistry } from "./rooms";
+import {
+  scheduleTurnExpiry,
+  startTurnTicks,
+  cancelTurnTimers,
+} from "./turnScheduler";
 
 /** Contextual data attached to each socket at upgrade time. */
 export interface SocketData {
@@ -339,6 +345,10 @@ function handleControlMessage(
         });
         return;
       }
+      
+      // Cancel any running turn timers
+      cancelTurnTimers(code);
+      
       room.session = applyEvent(room.session, {
         type: "sessionEnded",
         by: actor,
@@ -376,6 +386,8 @@ function handleControlMessage(
         startedAt: Date.now(),
       });
       broadcastSessionState(room, server, code);
+      // Schedule turn timer and tick broadcasts (REQ-025, REQ-026)
+      scheduleAndStartTurnTimers(room, server, code, registry);
       return;
     }
 
@@ -398,10 +410,49 @@ function handleControlMessage(
         });
         return;
       }
+      
+      // Cancel the running turn timer (REQ-010.3)
+      cancelTurnTimers(code);
+      
+      // Guard against double-end (REQ-024)
+      if (!room.session.currentTurn || room.session.currentTurn.ended) {
+        return;
+      }
+      
+      // Apply turnEnded event
       room.session = applyEvent(room.session, {
-        type: "earlyEndRequested",
-        by: actor,
+        type: "turnEnded",
+        reason: "early-end",
+        endedAt: Date.now(),
       });
+      
+      // Broadcast TurnEndedMsg
+      const turnEndedMsg: ServerMessage = {
+        channel: "control",
+        type: "turnEnded",
+        reason: "early-end",
+        endedAt: Date.now(),
+      };
+      if (server) {
+        server.publish(roomTopic(code), JSON.stringify(turnEndedMsg));
+      }
+
+      // Advance to next turn (per selection policy) for round-robin
+      if (room.session.turnConfig?.selectionPolicy === "round-robin") {
+        const nextDriver = findNextConnectedDriver(room.session);
+        if (nextDriver && server) {
+          room.session = applyEvent(room.session, {
+            type: "turnAdvanced",
+            nextDriver: nextDriver.driver,
+            startedAt: Date.now(),
+          });
+
+          // Start timers for the new turn
+          scheduleAndStartTurnTimers(room, server, code, registry);
+        }
+      }
+      // For manual pass, host will call startTurn next
+
       broadcastSessionState(room, server, code);
       return;
     }
@@ -409,6 +460,79 @@ function handleControlMessage(
     default:
       return;
   }
+}
+
+/**
+ * Schedule turn expiry and tick broadcasts for a room.
+ * Called when a turn starts to set up the timer lifecycle.
+ *
+ * - Schedules the turn expiry after the configured duration
+ * - Starts tick broadcasts every 1 second
+ * - When expiry fires: applies turnEnded, advances turn, broadcasts new state
+ */
+function scheduleAndStartTurnTimers(
+  room: NonNullable<ReturnType<RoomRegistry["get"]>>,
+  server: Server<SocketData> | undefined,
+  code: string,
+  registry: RoomRegistry,
+): void {
+  if (!room.session.turnConfig || !server) return;
+
+  const durationMs = room.session.turnConfig.durationMs;
+
+  // Schedule expiry callback
+  scheduleTurnExpiry(code, durationMs, () => {
+    const currentRoom = registry.get(code);
+    if (!currentRoom || !currentRoom.session.currentTurn) return;
+
+    // Guard against double-end (REQ-024)
+    if (currentRoom.session.currentTurn.ended) return;
+
+    // Apply turnEnded event
+    currentRoom.session = applyEvent(currentRoom.session, {
+      type: "turnEnded",
+      reason: "expiry",
+      endedAt: Date.now(),
+    });
+
+    // Broadcast TurnEndedMsg
+    const turnEndedMsg: ServerMessage = {
+      channel: "control",
+      type: "turnEnded",
+      reason: "expiry",
+      endedAt: Date.now(),
+    };
+    server.publish(roomTopic(code), JSON.stringify(turnEndedMsg));
+
+    // Advance to next turn (per selection policy)
+    if (currentRoom.session.turnConfig?.selectionPolicy === "round-robin") {
+      const nextDriver = findNextConnectedDriver(currentRoom.session);
+      if (nextDriver) {
+        currentRoom.session = applyEvent(currentRoom.session, {
+          type: "turnAdvanced",
+          nextDriver: nextDriver.driver,
+          startedAt: Date.now(),
+        });
+
+        // Start timers for the new turn
+        scheduleAndStartTurnTimers(currentRoom, server, code, registry);
+      }
+    }
+    // For manual pass, host will call startTurn next
+
+    // Broadcast final state
+    broadcastSessionState(currentRoom, server, code);
+  });
+
+  // Start tick broadcasts
+  startTurnTicks(code, (remainingMs) => {
+    const tickMsg: ServerMessage = {
+      channel: "control",
+      type: "timerTick",
+      remainingMs,
+    };
+    server.publish(roomTopic(code), JSON.stringify(tickMsg));
+  });
 }
 
 /**

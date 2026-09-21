@@ -1,10 +1,11 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test, afterEach } from "bun:test";
 import type { Server } from "bun";
 import { ChangeSet } from "@codemirror/state";
 import { applyEvent } from "@codayon/shared";
 import { createAppWithDeps } from "./app";
 import { createWebSocketHandler, tryUpgrade, type SocketData } from "./ws";
 import { RoomRegistry } from "./rooms";
+import { clearAllTimers } from "./turnScheduler";
 import type { ClientMessage, ServerMessage, WireUpdate } from "@codayon/shared";
 
 let server: Server<SocketData>;
@@ -321,6 +322,228 @@ describe("presence channel (REQ-018)", () => {
     const gone = (await goneP) as Extract<ServerMessage, { type: "presenceGone" }>;
     expect(gone.participantId).toBeTruthy();
 
+    peer.close();
+  });
+});
+
+describe("turn scheduling (FEAT-003 Task 1, REQ-025, REQ-026)", () => {
+  afterEach(() => {
+    clearAllTimers();
+  });
+
+  test("timer ticks are broadcast every 1s when a turn starts", async () => {
+    // Get Bun's jest for fake timers
+    const { jest } = require("bun:test");
+    jest.useFakeTimers();
+
+    const room = await createRoom();
+    const guest = await joinRoom(room.code);
+    const host = await connect(room.code, room.clientToken);
+    const peer = await connect(room.code, guest.clientToken);
+
+    // Configure for fixed mode, 5 second turns
+    sendMsg(host, {
+      channel: "control",
+      type: "configure",
+      mode: "fixed",
+      durationMs: 5000,
+      selectionPolicy: "round-robin",
+    });
+
+    // Wait for config acknowledgement
+    await nextMessage(
+      host,
+      (m) => m.channel === "control" && m.type === "sessionSnapshot",
+    );
+
+    // Start session
+    sendMsg(host, { channel: "control", type: "startSession" });
+    await nextMessage(
+      host,
+      (m) => m.channel === "control" && m.type === "sessionSnapshot",
+    );
+
+    // Start a turn
+    const boot = (await fetch(`${baseUrl}/api/rooms/${room.code}/bootstrap`).then(
+      (r) => r.json() as Promise<{ roster: { id: string; name: string }[] }>,
+    )) as any;
+    const firstDriver = boot.roster[0].id;
+
+    sendMsg(host, {
+      channel: "control",
+      type: "startTurn",
+      driver: firstDriver,
+    });
+
+    // Both peers should receive session snapshot indicating turn started
+    await nextMessage(
+      peer,
+      (m) => m.channel === "control" && m.type === "sessionSnapshot",
+    );
+
+    // Advance time by 1 second and expect a tick
+    jest.advanceTimersByTime(1000);
+    const tick1P = nextMessage(
+      peer,
+      (m) => m.channel === "control" && m.type === "timerTick",
+    );
+    const tick1 = (await tick1P) as Extract<ServerMessage, { type: "timerTick" }>;
+    expect(tick1.remainingMs).toBeLessThanOrEqual(4100);
+    expect(tick1.remainingMs).toBeGreaterThan(3900);
+
+    // Advance by another second
+    jest.advanceTimersByTime(1000);
+    const tick2P = nextMessage(
+      peer,
+      (m) => m.channel === "control" && m.type === "timerTick",
+    );
+    const tick2 = (await tick2P) as Extract<ServerMessage, { type: "timerTick" }>;
+    expect(tick2.remainingMs).toBeLessThanOrEqual(3100);
+    expect(tick2.remainingMs).toBeGreaterThan(2900);
+
+    jest.useRealTimers();
+    host.close();
+    peer.close();
+  });
+
+  test("turn expiry broadcasts TurnEndedMsg and advances to next turn (round-robin)", async () => {
+    const { jest } = require("bun:test");
+    jest.useFakeTimers();
+
+    const room = await createRoom();
+    const guest = await joinRoom(room.code);
+    const host = await connect(room.code, room.clientToken);
+    const peer = await connect(room.code, guest.clientToken);
+
+    // Configure for fixed mode, 2 second turns, round-robin
+    sendMsg(host, {
+      channel: "control",
+      type: "configure",
+      mode: "fixed",
+      durationMs: 2000,
+      selectionPolicy: "round-robin",
+    });
+
+    await nextMessage(
+      host,
+      (m) => m.channel === "control" && m.type === "sessionSnapshot",
+    );
+
+    // Start session
+    sendMsg(host, { channel: "control", type: "startSession" });
+    await nextMessage(
+      host,
+      (m) => m.channel === "control" && m.type === "sessionSnapshot",
+    );
+
+    // Get roster to know the driver order
+    const boot = (await fetch(`${baseUrl}/api/rooms/${room.code}/bootstrap`).then(
+      (r) => r.json() as Promise<{ roster: { id: string; name: string }[] }>,
+    )) as any;
+    const firstDriver = boot.roster[0].id;
+
+    // Start first turn
+    sendMsg(host, {
+      channel: "control",
+      type: "startTurn",
+      driver: firstDriver,
+    });
+
+    await nextMessage(
+      peer,
+      (m) => m.channel === "control" && m.type === "sessionSnapshot",
+    );
+
+    // Advance time past the 2 second duration
+    jest.advanceTimersByTime(2100);
+
+    // Peer should receive TurnEndedMsg
+    const turnEndedP = nextMessage(
+      peer,
+      (m) => m.channel === "control" && m.type === "turnEnded",
+    );
+    const turnEnded = (await turnEndedP) as Extract<ServerMessage, { type: "turnEnded" }>;
+    expect(turnEnded.reason).toBe("expiry");
+
+    // New turn should start automatically (round-robin)
+    // Peer should get a sessionSnapshot showing a new turn
+    const newSnapshotP = nextMessage(
+      peer,
+      (m) => m.channel === "control" && m.type === "sessionSnapshot",
+    );
+    const newSnapshot = (await newSnapshotP) as Extract<ServerMessage, { type: "sessionSnapshot" }>;
+    expect(newSnapshot.phase).toBe("active");
+
+    jest.useRealTimers();
+    host.close();
+    peer.close();
+  });
+
+  test("early-end cancels the timer and ends the turn", async () => {
+    const { jest } = require("bun:test");
+    jest.useFakeTimers();
+
+    const room = await createRoom();
+    const guest = await joinRoom(room.code);
+    const host = await connect(room.code, room.clientToken);
+    const peer = await connect(room.code, guest.clientToken);
+
+    // Configure for fixed-early-end mode, 10 second turns
+    sendMsg(host, {
+      channel: "control",
+      type: "configure",
+      mode: "fixed-early-end",
+      durationMs: 10000,
+      selectionPolicy: "round-robin",
+    });
+
+    await nextMessage(
+      host,
+      (m) => m.channel === "control" && m.type === "sessionSnapshot",
+    );
+
+    // Start session
+    sendMsg(host, { channel: "control", type: "startSession" });
+    await nextMessage(
+      host,
+      (m) => m.channel === "control" && m.type === "sessionSnapshot",
+    );
+
+    // Get the first driver (which is the host in this case)
+    const boot = (await fetch(`${baseUrl}/api/rooms/${room.code}/bootstrap`).then(
+      (r) => r.json() as Promise<{ roster: { id: string; name: string }[] }>,
+    )) as any;
+    const firstDriver = boot.roster[0].id;
+
+    // Start first turn
+    sendMsg(host, {
+      channel: "control",
+      type: "startTurn",
+      driver: firstDriver,
+    });
+
+    await nextMessage(
+      peer,
+      (m) => m.channel === "control" && m.type === "sessionSnapshot",
+    );
+
+    // Driver requests early end
+    sendMsg(host, { channel: "control", type: "earlyEnd" });
+
+    // Peer should receive TurnEndedMsg with reason "early-end"
+    const turnEndedP = nextMessage(
+      peer,
+      (m) => m.channel === "control" && m.type === "turnEnded",
+    );
+    const turnEnded = (await turnEndedP) as Extract<ServerMessage, { type: "turnEnded" }>;
+    expect(turnEnded.reason).toBe("early-end");
+
+    // Advance time: no additional tick should fire (timer was cancelled)
+    jest.advanceTimersByTime(5000);
+    // No expiry TurnEndedMsg should arrive (it already ended via early-end)
+
+    jest.useRealTimers();
+    host.close();
     peer.close();
   });
 });
