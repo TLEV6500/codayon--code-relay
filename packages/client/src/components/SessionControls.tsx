@@ -127,6 +127,7 @@ export const SessionControls: Component<SessionControlsProps> = (props) => {
   const [showConfig, setShowConfig] = createSignal(false);
   const [rosterOpen, setRosterOpen] = createSignal(false);
   const [gracePeriodRemainingMs, setGracePeriodRemainingMs] = createSignal<number>(0);
+  const [hostDisconnected, setHostDisconnected] = createSignal(false);
   
   // Smooth countdown interpolation (REQ-027)
   const [displayMs, setDisplayMs] = createSignal<number | null>(null);
@@ -188,6 +189,13 @@ export const SessionControls: Component<SessionControlsProps> = (props) => {
     updateCountdown(); // Initial update
     const interval = setInterval(updateCountdown, 100);
     return () => clearInterval(interval);
+  });
+  
+  // Track host disconnect status (REQ-034, Task 8)
+  createEffect(() => {
+    const host = props.roster?.find((p) => p.role === "host");
+    const isHostDisconnected = host?.connected === false;
+    setHostDisconnected(isHostDisconnected ?? false);
   });
   
   // Format milliseconds to MM:SS
@@ -300,6 +308,19 @@ export const SessionControls: Component<SessionControlsProps> = (props) => {
 
   return (
     <div class="flex flex-col gap-3">
+      {/* Host Disconnect Indicator (REQ-034, Task 8) */}
+      <Show when={hostDisconnected()}>
+        <div class="border-l-4 border-orange-500 bg-orange-900/30 rounded-r-lg p-3">
+          <div class="flex items-center gap-2">
+            <div class="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
+            <span class="text-sm font-semibold text-orange-300">Host Disconnected</span>
+          </div>
+          <p class="text-xs text-slate-400 mt-1">
+            Waiting for host to reconnect...
+          </p>
+        </div>
+      </Show>
+
       {/* Host Control Panel */}
       <Show when={props.role === "host"}>
         <div class="border border-slate-700 rounded-lg p-3 bg-slate-900/60">
