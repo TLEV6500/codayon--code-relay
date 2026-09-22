@@ -31,6 +31,7 @@ export interface RoomEditorProps {
   readonly clientID: string;
   readonly role: "host" | "observer" | "spectator";
   readonly onSessionEnded?: () => void;
+  readonly onBootstrapError?: (message: string) => void;
 }
 
 /**
@@ -115,28 +116,32 @@ export const RoomEditor: Component<RoomEditorProps> = (props) => {
   let controlErrorTimeout: NodeJS.Timeout | undefined;
 
   onMount(async () => {
-    const boot = await bootstrapRoom(props.code, props.clientToken);
-    const conn = await connectRelay({
-      code: props.code,
-      clientToken: props.clientToken,
-    });
-    setConnection(conn);
+    try {
+      const boot = await bootstrapRoom(props.code, props.clientToken);
+      const conn = await connectRelay({
+        code: props.code,
+        clientToken: props.clientToken,
+      });
+      setConnection(conn);
 
-    // Set initial session state from bootstrap
-    setSessionPhase(boot.phase);
-    setRoster(boot.roster);
-    
-    // Use server-confirmed role from bootstrap if available (REQ-035)
-    if (boot.role) {
-      setRole(boot.role);
-    }
+      // Set initial session state from bootstrap
+      setSessionPhase(boot.phase);
+      setRoster(boot.roster);
+      
+      // Use server-confirmed role from bootstrap if available (REQ-035)
+      if (boot.role) {
+        setRole(boot.role);
+      }
 
-    // Subscribe to session/turn updates
-    conn.onMessage((msg: ServerMessage) => {
-      if (msg.channel === "control") {
-        if (msg.type === "roleAssigned") {
-          // Role confirmation on join/reconnect (REQ-035)
-          const roleMsg = msg as RoleAssignedMsg;
+      // Strip clientToken from visible URL after successful mount (BUGFIX-006)
+      window.history.replaceState({}, "", `/room/${props.code}`);
+
+      // Subscribe to session/turn updates
+      conn.onMessage((msg: ServerMessage) => {
+        if (msg.channel === "control") {
+          if (msg.type === "roleAssigned") {
+            // Role confirmation on join/reconnect (REQ-035)
+            const roleMsg = msg as RoleAssignedMsg;
           if (roleMsg.participantId === props.clientID) {
             setRole(roleMsg.role);
           }
@@ -223,6 +228,11 @@ export const RoomEditor: Component<RoomEditorProps> = (props) => {
     });
 
     view = new EditorView({ state, parent: host });
+    } catch (error) {
+      // Bootstrap failed; notify parent component and return to lobby (BUGFIX-006)
+      const message = error instanceof Error ? error.message : "Failed to bootstrap room";
+      props.onBootstrapError?.(message);
+    }
   });
 
   const changeLanguage = (newLang: LanguageName) => {

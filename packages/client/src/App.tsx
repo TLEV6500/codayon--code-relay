@@ -1,4 +1,4 @@
-import { createSignal, Show, type Component } from "solid-js";
+import { createSignal, Show, createEffect, type Component } from "solid-js";
 import { banner, type JoinableRole } from "@codayon/shared";
 import { createRoom, joinRoom } from "./api";
 import { RoomEditor } from "./components/RoomEditor";
@@ -21,6 +21,23 @@ export const App: Component = () => {
   const [joinCode, setJoinCode] = createSignal("");
   const [name, setName] = createSignal("");
   const [sessionEnded, setSessionEnded] = createSignal(false);
+
+  // Parse URL parameters for room auto-join (BUGFIX-006)
+  const urlParams = new URLSearchParams(window.location.search);
+  const codeFromURL = window.location.pathname.match(/\/room\/([A-Z0-9]+)/)?.[1];
+  const tokenFromURL = urlParams.get("clientToken");
+
+  // Auto-join if both room code and token are present in the URL
+  createEffect(() => {
+    if (codeFromURL && tokenFromURL && !session()) {
+      setSession({
+        code: codeFromURL,
+        clientToken: tokenFromURL,
+        clientID: randomClientID(),
+        role: "observer", // Placeholder; RoomEditor bootstrap will provide the real role (REQ-035)
+      });
+    }
+  });
 
   async function onCreate() {
     setBusy(true);
@@ -92,6 +109,10 @@ export const App: Component = () => {
                   clientID={s().clientID}
                   role={s().role}
                   onSessionEnded={() => setSessionEnded(true)}
+                  onBootstrapError={(message) => {
+                    setSession(null);
+                    setError(message);
+                  }}
                 />
               </main>
             </div>
