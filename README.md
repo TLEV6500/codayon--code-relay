@@ -2,9 +2,20 @@
 
 Codayon is a gamified, turn-based collaborative code relay platform for educational workshops, mentorship, and team-building coding relays. Participants take timed turns driving a shared code editor while others watch live with real-time presence (cursors, selections). One person types at a time; control passes predictably via round-robin rotation or host-controlled manual pass.
 
+## Status at a Glance
+
+| Feature | Status | Notes |
+|---|---|---|
+| FEAT-001 — Turn-based relay foundation | ✅ Complete | Core editor, turn engine, roles, presence |
+| FEAT-002 — Docker Compose integration | ✅ Complete | Dev + prod profiles, same-origin nginx routing |
+| FEAT-003 — Session UI/UX completion | ✅ Complete (13/13 tasks) | All server-modeled capabilities now surfaced in the client UI |
+| FEAT-004 — E2E UI testing (Bun WebView) | ✅ Implemented, ⚠️ known intermittent flakiness | See [Test Status](#test-status) |
+| Known gaps (documented, not yet fixed) | 📝 Documented via failing/passing tests | Duplicate names, host-disconnect broadcast, host-rejoin — see [Known Gaps](#known-gaps-documented-not-yet-fixed) |
+| Persistent storage, in-browser execution, autocomplete, gamification | ⛔ Not built | See [Future Roadmap](#future-roadmap) |
+
 ## Features
 
-### FEAT-001: Turn-Based Code Relay Foundation
+### FEAT-001: Turn-Based Code Relay Foundation ✅
 
 The core collaboration backbone with minimal shared editor:
 
@@ -20,9 +31,11 @@ The core collaboration backbone with minimal shared editor:
 - **Backend:** Bun + Hono (HTTP) + native Bun WebSocket (relay authority)
 - **Frontend:** SolidJS + Vite + Tailwind CSS v4 + CodeMirror 6
 - **Runtime:** Bun 1.4+, TypeScript end-to-end
-- **Monorepo:** Bun workspaces (`packages/server`, `packages/client`, `packages/shared`)
+- **Monorepo:** Bun workspaces (`packages/server`, `packages/client`, `packages/shared`, `packages/e2e`)
 
-### FEAT-002: Docker Compose Integration
+See `docs/requirements/FEAT-001-turn-based-code-relay/` for requirements, design, and tasks.
+
+### FEAT-002: Docker Compose Integration ✅
 
 Production-ready containerization with dev/prod orchestration:
 
@@ -31,42 +44,58 @@ Production-ready containerization with dev/prod orchestration:
   - **`prod`** — fully baked multi-stage images, static client build, minimal footprint, no dev tooling
 - **Same-origin routing** — nginx reverse proxy unifies client (`/`) and server (`/api`, `/ws`) under one origin, avoiding CORS/mixed-origin WebSocket issues
 - **WebSocket support** — full upgrade header forwarding for real-time relay in both dev and prod
-- **Multi-stage builds** — server prod image 46% smaller (258 MB vs 478 MB dev), no dev dependencies
+- **Multi-stage builds** — server prod image significantly smaller than dev, no dev dependencies
 - **Railway-compatible** — each Dockerfile runs standalone; services deployable as individual Railway services later
 - **Configurable** — `.env.example` with port/env var defaults, `.env` (gitignored) for overrides
 
-### FEAT-003: Session UI/UX Completion (In Progress)
+See `docs/requirements/FEAT-002-docker-compose-integration/` for requirements, design, and tasks.
 
-Closes gaps between server-modeled capabilities and the client UI — features that were already implemented in the turn engine/protocol but never surfaced to users:
+### FEAT-003: Session UI/UX Completion ✅
 
-- **Turn timer end-to-end** — server-side scheduler auto-expires fixed-duration turns and broadcasts a live countdown (previously: turns never ended automatically; only manual/early-end worked)
+All 13 tasks complete. Closed the gaps between server-modeled capabilities and the client UI — features that were already implemented in the turn engine/protocol but never surfaced to users:
+
+- **Turn timer end-to-end** — server-side scheduler auto-expires fixed-duration turns and broadcasts a live countdown
 - **Driver & turn visibility** — current driver name and turn number shown to all participants
 - **Manual driver assignment UI** — host picker to choose the next driver by name (manual selection policy)
 - **Rotation order visibility** — round-robin order and "who's up next" shown to all participants
-- **Disconnect grace period UX** — visible countdown for all users + host reassign/extend/skip actions when a driver or host disconnects mid-turn
+- **Disconnect grace period UX** — visible countdown for all users + host reassign/extend/skip actions when a driver disconnects mid-turn (`GracePeriodModal.tsx`)
 - **Host-specific disconnect indicator** — distinct, always-visible signal when the host (not just any participant) disconnects
-- **Control rejection & session-ended feedback** — clear, human-readable feedback instead of silent failures or a frozen editor
+- **Role assignment confirmation** — server-confirmed role delivered on join/reconnect, UI reflects it reactively (not a stale initial prop)
+- **Control rejection & session-ended feedback** — clear, human-readable feedback instead of silent failures or a frozen editor (`SessionEnded.tsx`)
 
-See `docs/requirements/FEAT-003-session-ux-completion/` for the full gap audit, requirements, and design.
+See `docs/requirements/FEAT-003-session-ux-completion/` for the full gap audit, requirements, design, and the task-by-task completion record.
 
-### FEAT-004: End-to-End UI Testing with Bun WebView
+### FEAT-004: End-to-End UI Testing with Bun WebView ✅
 
 Render-level e2e tests that drive a real browser against a real server + client, catching component-mounting bugs that unit tests cannot:
 
 - **Motivation:** FEAT-003 shipped with two defects where state was tracked but never wired into rendered UI (non-reactive signals, stale props). Unit tests and server-side integration tests passed, but users saw nothing rendered.
 - **Solution:** Real browser assertions on actual DOM via `Bun.WebView` + Chrome backend
-- **Coverage:** All 12 FEAT-003 UI surfaces (SessionControls, turn timer, driver visibility, rotation order, grace period, host-disconnect indicator, control rejection, session-ended view, early-end affordance)
-- **Architecture:** Ephemeral server + static client on port 0, multi-view scenarios, same-origin routing
-- **Test suite:** 23 tests across 12 files, all passing (4 directly, 19 blocked by missing URL auto-join feature)
+- **Coverage:** All FEAT-003 UI surfaces (SessionControls, turn timer, driver visibility, rotation order, grace period, host-disconnect indicator, control rejection, session-ended view, early-end affordance)
+- **Architecture:** Ephemeral server + static client on port 0, multi-view scenarios, same-origin routing via a custom harness (real Bun native WebSocket proxying, not `fetch()`-based forwarding)
+- **URL-based auto-join:** the client parses `/room/{code}?clientToken={token}` on load and auto-joins — this was the original blocker for most e2e tests (see `docs/bugfixes/BUGFIX-006-url-based-room-autojoin.md`) and is now implemented in `App.tsx`
 
-See `docs/requirements/FEAT-004-e2e-ui-testing/` for requirements, design, and tasks. See `FEAT-004-E2E-TEST-FINDINGS.md` for test results and feature gap analysis.
+See `docs/requirements/FEAT-004-e2e-ui-testing/` for requirements, design, and tasks. See [Test Status](#test-status) below for current pass rates and known flakiness.
+
+## Known Gaps (Documented, Not Yet Fixed)
+
+Three gaps were found in a follow-up audit after FEAT-003/FEAT-004 shipped. By explicit decision, this pass only added **tests that document current behavior** — no production code was changed. Full root-cause analysis: `docs/bugfixes/GAPS-duplicate-names-host-disconnect-rejoin.md`.
+
+| Gap | Type | Current Behavior | Proven By |
+|---|---|---|---|
+| **Duplicate names** | Missing validation | Any number of participants (including a rejoining participant) can share an identical display name on the roster — no uniqueness check anywhere in the stack | `packages/shared/src/engine.duplicate-names.test.ts`, `packages/server/src/rooms.duplicate-names.test.ts` (tests **pass** — they document the permissive behavior) |
+| **Host-disconnect broadcast** | Real bug | When the host (or any non-driving participant) disconnects, `ws.ts`'s close handler updates internal state but never broadcasts it — other clients' rosters and the host-disconnect indicator go stale until an unrelated action happens to trigger a broadcast | `packages/server/src/ws.host-disconnect-broadcast.test.ts`, `packages/e2e/src/host-disconnect-live-update.test.ts` (tests **fail/timeout** — this is a real defect) |
+| **Host rejoin** | Missing feature | If a host loses their session (closed tab, cleared storage, new device), there is no way back in as host — the lobby only offers "Join as participant" (observer) or "Spectate"; no endpoint accepts the secret `hostToken` to remint a host session | `packages/client/src/App.test.ts` (`describe("Host rejoin gap (undocumented feature)")`) (tests **pass** — they document the absence) |
+
+None of these are blocking for the MVP relay flow (create → configure → run turns → end session all work correctly for a single host who stays connected), but they should be addressed before running unattended or high-churn sessions.
 
 ## Quick Start
 
 ### Prerequisites
 
 - **Bun 1.4+** ([install](https://bun.sh))
-- **Docker + Docker Compose** ([install](https://docs.docker.com/compose/install/))
+- **Docker + Docker Compose** ([install](https://docs.docker.com/compose/install/)) — only needed for the containerized workflow
+- **Chrome/Chromium/Edge/Brave** — only needed to run the e2e test suite (`bun run test:e2e`)
 
 ### Development: Run Locally with Docker Compose
 
@@ -161,72 +190,87 @@ Access at `http://localhost:9000`.
 ```
 .
 ├── packages/
-│   ├── server/          # Hono HTTP + Bun native WebSocket relay
+│   ├── server/               # Hono HTTP + Bun native WebSocket relay
 │   │   └── src/
-│   │       ├── index.ts         # Bun.serve entrypoint
-│   │       ├── app.ts           # Hono HTTP routes (create/join/bootstrap)
-│   │       ├── ws.ts            # WebSocket handler, message dispatch
-│   │       ├── relay.ts         # RoomDoc authority (OT reconciliation)
-│   │       └── routes/rooms.ts  # Room lifecycle endpoints
-│   ├── client/          # SolidJS + Vite + Tailwind + CodeMirror
+│   │       ├── index.ts              # Bun.serve entrypoint
+│   │       ├── app.ts                # Hono app wiring (createApp/createAppWithDeps)
+│   │       ├── ws.ts                 # WebSocket handler: doc/presence/control channels,
+│   │       │                         #   turn control, grace period, session broadcasts
+│   │       ├── relay.ts              # RoomDoc authority (OT reconciliation)
+│   │       ├── rooms.ts              # RoomRegistry: create/join/bootstrap, host tokens
+│   │       ├── turnScheduler.ts      # Per-room turn-expiry + tick + grace-period timers
+│   │       ├── test-exports.ts       # Re-exports for e2e harness consumption
+│   │       └── routes/rooms.ts       # HTTP room lifecycle endpoints (create/join/bootstrap)
+│   ├── client/                # SolidJS + Vite + Tailwind + CodeMirror
 │   │   ├── src/
-│   │   │   ├── main.tsx         # Entry point
-│   │   │   ├── App.tsx          # Lobby + session view
-│   │   │   └── ...
-│   │   └── vite.config.ts       # Vite config (dev proxy configurable)
-│   ├── e2e/             # End-to-end UI tests (Bun.WebView)
+│   │   │   ├── main.tsx              # Entry point
+│   │   │   ├── App.tsx               # Lobby + URL auto-join + session view
+│   │   │   ├── api.ts                # HTTP client (createRoom/joinRoom/bootstrapRoom)
+│   │   │   ├── collab/
+│   │   │   │   ├── transport.ts      # Typed WebSocket wrapper (RelayConnection)
+│   │   │   │   ├── peer.ts           # CodeMirror collab peer extension
+│   │   │   │   ├── presence.ts       # Remote cursor/selection rendering
+│   │   │   │   └── languages.ts      # Language-mode registry for the editor
+│   │   │   └── components/
+│   │   │       ├── RoomEditor.tsx    # Editor mount, session state, control-channel subscriptions
+│   │   │       ├── SessionControls.tsx  # Host/driver controls, roster, countdown, all FEAT-003 UI
+│   │   │       ├── GracePeriodModal.tsx # Host-only reassign/extend/skip modal
+│   │   │       └── SessionEnded.tsx     # Session-ended teardown screen
+│   │   └── vite.config.ts            # Vite config (dev proxy configurable)
+│   ├── e2e/                   # End-to-end UI tests (Bun.WebView)
 │   │   └── src/
-│   │       ├── harness.ts       # Test harness: server + client on ephemeral ports
-│   │       ├── selectors.ts     # Centralized data-testid selectors
-│   │       ├── connection.test.ts        # REQ-042 (SessionControls mounts)
-│   │       ├── role-confirmation.test.ts # REQ-043 (role-gated UI)
-│   │       ├── turn-timer.test.ts       # REQ-044 (countdown renders)
-│   │       ├── driver-visibility.test.ts # REQ-045 (driver name consistency)
-│   │       ├── manual-driver-picker.test.ts # REQ-046 (picker conditions)
-│   │       ├── rotation-order.test.ts   # REQ-047 (late-joiner insertion)
-│   │       ├── grace-period.test.ts     # REQ-048 (grace period UX)
-│   │       ├── host-disconnect.test.ts  # REQ-049 (disconnect indicator)
-│   │       ├── control-rejection.test.ts # REQ-050 (rejection banner)
-│   │       ├── session-ended.test.ts    # REQ-051 (ended view)
-│   │       └── early-end-affordance.test.ts # REQ-052 (early-end button)
-│   └── shared/          # Protocol types + turn engine (pure logic)
+│   │       ├── harness.ts                    # Server + client on ephemeral ports,
+│   │       │                                 #   real WebSocket proxying (not fetch()-based)
+│   │       ├── selectors.ts                  # Centralized data-testid selectors
+│   │       ├── test-helpers.ts                # waitForSelector/waitForEvaluate polling helpers
+│   │       ├── connection.test.ts            # REQ-042 (SessionControls mounts)
+│   │       ├── role-confirmation.test.ts     # REQ-043 (role-gated UI)
+│   │       ├── turn-timer.test.ts            # REQ-044 (countdown renders)
+│   │       ├── driver-visibility.test.ts     # REQ-045 (driver name consistency)
+│   │       ├── manual-driver-picker.test.ts  # REQ-046 (picker conditions)
+│   │       ├── rotation-order.test.ts        # REQ-047 (late-joiner insertion)
+│   │       ├── grace-period.test.ts          # REQ-048 (grace period UX)
+│   │       ├── host-disconnect.test.ts       # REQ-049 (disconnect indicator)
+│   │       ├── control-rejection.test.ts     # REQ-050 (rejection banner)
+│   │       ├── session-ended.test.ts         # REQ-051 (ended view)
+│   │       ├── early-end-affordance.test.ts  # REQ-052 (early-end button)
+│   │       └── host-disconnect-live-update.test.ts # GAP: proves host-disconnect broadcast bug (expected to fail)
+│   └── shared/                # Protocol types + turn engine (pure logic)
 │       └── src/
-│           ├── protocol.ts      # Wire message types
-│           ├── engine.ts        # Turn state machine
-│           └── ...
-├── docker/              # Container configs
-│   ├── server/Dockerfile        # Multi-stage: dev + prod targets
-│   ├── client/Dockerfile        # Multi-stage: dev + build + prod targets
+│           ├── protocol.ts           # Wire message types (ClientMessage/ServerMessage)
+│           ├── domain.ts             # Core domain types (Role, TurnConfig, SessionState, etc.)
+│           ├── engine.ts             # Turn state machine (createSession/applyEvent)
+│           └── index.ts              # Package entrypoint
+├── docker/                    # Container configs
+│   ├── server/Dockerfile             # Multi-stage: dev + prod targets
+│   ├── client/Dockerfile             # Multi-stage: dev + build + prod targets
 │   └── nginx/
-│       ├── Dockerfile           # Prod-only nginx image
-│       ├── nginx.conf           # Shared routing config
-│       ├── root.dev.conf        # Dev variant (proxy to Vite)
-│       ├── root.prod.conf       # Prod variant (static files + SPA fallback)
-│       └── entrypoint.sh        # Profile selection + hostname substitution
-├── docker-compose.yml           # Dev + prod profiles
-├── .env.example                 # Configurable env vars (ports, etc.)
-├── package.json                 # Root monorepo workspace config
-├── bun.lock                     # Bun lockfile
-├── FEAT-004-E2E-TEST-FINDINGS.md    # E2E test results and feature gap analysis
-├── IMPLEMENTATION-GUIDE-URL-AUTOJOIN.md # Quick guide to implement missing URL parameter parsing
+│       ├── Dockerfile                # Prod-only nginx image
+│       ├── nginx.conf                # Shared routing config
+│       ├── root.dev.conf             # Dev variant (proxy to Vite)
+│       ├── root.prod.conf            # Prod variant (static files + SPA fallback)
+│       └── entrypoint.sh             # Profile selection + hostname substitution
+├── docker-compose.yml                # Dev + prod profiles
+├── .env.example                      # Configurable env vars (ports, etc.)
+├── package.json                      # Root monorepo workspace config
+├── bun.lock                          # Bun lockfile
 └── docs/
-    └── requirements/
-        ├── FEAT-001-turn-based-code-relay/
-        │   ├── requirements.md   # User stories, acceptance criteria (EARS)
-        │   ├── design.md         # Approved tech decisions, architecture
-        │   └── tasks.md          # Implementation task breakdown
-        ├── FEAT-002-docker-compose-integration/
-        │   ├── requirements.md   # Docker/compose requirements (EARS)
-        │   ├── design.md         # Multi-stage, same-origin routing, Railway compatibility
-        │   └── tasks.md          # 8 tasks: Dockerfiles, compose profiles, prod wiring
-        ├── FEAT-003-session-ux-completion/
-        │   ├── requirements.md   # UI/UX gap audit + requirements (EARS)
-        │   ├── design.md         # Turn scheduler, protocol additions, component plan
-        │   └── tasks.md          # 13 tasks: timer, driver/rotation visibility, grace period UX
-        └── FEAT-004-e2e-ui-testing/
-            ├── requirements.md   # E2E test requirements and gap analysis (EARS)
-            ├── design.md         # Bun.WebView architecture, harness design, test strategy
-            └── tasks.md          # 15 tasks: harness, data-testid hooks, 11 render tests, docs
+    ├── requirements/
+    │   ├── FEAT-001-turn-based-code-relay/     # requirements.md, design.md, tasks.md
+    │   ├── FEAT-002-docker-compose-integration/ # requirements.md, design.md, tasks.md
+    │   ├── FEAT-003-session-ux-completion/      # requirements.md, design.md, tasks.md (13/13 done)
+    │   └── FEAT-004-e2e-ui-testing/              # requirements.md, design.md, tasks.md (15/15 done)
+    └── bugfixes/
+        ├── INDEX.md                              # Navigation, summary table, commit history
+        ├── BUGFIX-001-own-cursor-visibility.md
+        ├── BUGFIX-002-missing-host-controls.md
+        ├── BUGFIX-003-driver-early-end.md
+        ├── BUGFIX-004-host-disconnect-indicator.md
+        ├── BUGFIX-005-nginx-crlf-entrypoint-crash.md
+        ├── BUGFIX-006-url-based-room-autojoin.md
+        ├── BUGFIX-007-e2e-test-timing-and-reliability.md
+        ├── GAPS-duplicate-names-host-disconnect-rejoin.md # duplicate names, disconnect broadcast, host-rejoin
+        └── HOST_UX_FLOW.md                       # End-to-end host experience walkthrough
 ```
 
 ## Architecture
@@ -264,22 +308,24 @@ No bind mounts, fully baked, stateless
 
 No persistent accounts. Every session is:
 - Time-bounded
-- Identified by a room code + shareable link
-- Scoped to session duration only (no history, no transcripts retained post-session)
+- Identified by a room code + shareable link (`/room/{code}?clientToken={token}`, auto-joins on load)
+- Scoped to session duration only (no history, no transcripts retained post-session; `RoomRegistry.endRoom()` purges all in-memory state when a session ends)
 
 ### Real-Time Sync
 
-- **Authority:** server holds the canonical document state + edit order
+- **Authority:** server holds the canonical document state + edit order (`RoomDoc` in `relay.ts`)
 - **Collab:** client applies `@codemirror/collab` OT to send/receive updates
 - **Convergence:** all clients converge on identical document via server-ordered updates
 - **Presence:** transient cursors/selections broadcast separately, anchored via logical positions
 
 ### Roles
 
-- **Host:** session admin, owns the host token, can be admin-only or participate as a Driver
+- **Host:** session admin, owns the secret host token, can be admin-only or participate as a Driver (`hostParticipation: "admin-only" | "host-participant"`)
 - **Observer:** participant eligible for the Driver rotation
 - **Spectator:** watch-only, never eligible to drive or edit
-- **Driver:** current Observer/host+participant holding the edit token for the active turn
+- **Driver:** current Observer/host-participant holding the edit token for the active turn
+
+Identity is ephemeral, session-scoped, and keyed by an opaque generated `ParticipantId` — display names are never checked for uniqueness (see [Known Gaps](#known-gaps-documented-not-yet-fixed)).
 
 ### Turn Engine
 
@@ -287,35 +333,44 @@ No persistent accounts. Every session is:
 - **Early-end (optional):** driver can end their turn before timer if enabled
 - **Selection:**
   - **Round-robin:** automatic, fair rotation; late joiners inserted fairly
-  - **Manual pass:** host assigns next Driver each turn
-- **Disconnect handling:** driver disconnect triggers grace period + host prompt (reassign/extend/skip)
+  - **Manual pass:** host assigns next Driver each turn via a picker UI
+- **Disconnect handling:** driver disconnect triggers a 30s grace period + host prompt (reassign/extend/skip); non-driver disconnects (e.g. host, when not driving) update internal state but are **not currently broadcast** to other clients in real time (see [Known Gaps](#known-gaps-documented-not-yet-fixed))
 
 ## Development
 
 ### Running Tests
 
 ```bash
-# All workspaces (unit + integration tests)
+# All workspaces (unit + integration + e2e — see caveat below)
 bun test
 
 # Specific workspace
 bun --cwd packages/server test
 bun --cwd packages/client test
+bun --cwd packages/shared test
 ```
+
+> **Note:** bare `bun test` (no path argument) picks up **every** `*.test.ts` file across all workspaces, including `packages/e2e`. There is no automatic isolation between the fast unit/integration suite and the browser-driven e2e suite — if you want only the fast suite, target specific workspaces (`bun --cwd packages/server test`, etc.) or specific paths, and use `bun run test:e2e` / `bun test packages/e2e` when you specifically want the browser-driven suite.
+
+### Test Status
+
+Running `bun test` (everything) typically reports around:
+
+```
+~405-407 pass
+  3-5 fail
+Ran 410 tests across 38 files
+```
+
+The failures break down as:
+- **2 always-intentional** — `packages/server/src/ws.host-disconnect-broadcast.test.ts` and `packages/e2e/src/host-disconnect-live-update.test.ts` are gap-documentation tests that are *expected* to fail on every run; they prove the host-disconnect-broadcast bug described in [Known Gaps](#known-gaps-documented-not-yet-fixed). See `docs/bugfixes/GAPS-duplicate-names-host-disconnect-rejoin.md`.
+- **0-3 intermittently flaky** — one or more multi-view e2e tests (commonly `rotation-order.test.ts`, `grace-period.test.ts`, or `driver-visibility.test.ts`) occasionally fail due to an intermittent Bun WebView connection-establishment race when a browser instance opens two concurrent views in quick succession. This is a test-harness timing issue, not an application bug — see `docs/bugfixes/BUGFIX-007-e2e-test-timing-and-reliability.md`. Re-running usually reduces (but does not always eliminate) this count; which specific test(s) trip varies per run.
+
+Running `bun run test:e2e` in isolation typically shows ~22-23 out of 24 passing, with the same 2 intentional + 0-2 flaky failure pattern.
 
 ### End-to-End UI Tests (FEAT-004)
 
 The project includes render-level e2e tests using `Bun.WebView` to verify FEAT-003 UI surfaces are actually rendered in a real browser. These tests boot a real server + client and assert on the actual DOM, catching bugs (like non-reactive signals) that unit tests cannot.
-
-#### Test Status
-
-```
-23 tests across 12 test files
-✅ 4 pass   (harness + REQ-042 regression test for signal fix)
-⏳ 19 blocked (missing client feature: URL parameter auto-join)
-```
-
-The 19 blocked tests have identified a feature gap in the client: it doesn't parse URL query parameters to auto-join rooms. This is expected in TDD — tests fail because the feature is incomplete. See `FEAT-004-E2E-TEST-FINDINGS.md` for the detailed analysis and `IMPLEMENTATION-GUIDE-URL-AUTOJOIN.md` for implementation steps.
 
 #### Browser Dependency (Chrome/Chromium)
 
@@ -356,11 +411,14 @@ bun test packages/e2e
 
 E2E tests gracefully skip when Chrome is unavailable, with a clear message: "Chrome/Chromium not found. Install Chrome or set BUN_CHROME_PATH."
 
+Before running e2e tests, the client must be built (`bun run build:client`) — the harness serves static files from `packages/client/dist`.
+
 #### Test Structure
 
-- **Harness** (`packages/e2e/src/harness.ts`): boots server + client on ephemeral ports per test, with same-origin reverse-proxy routing
+- **Harness** (`packages/e2e/src/harness.ts`): boots a real server + a static-file/WebSocket-proxying client server on ephemeral ports per test, with same-origin routing. Proxies `/ws` via a genuine Bun native WebSocket connection to the real server (not `fetch()`, which cannot perform a protocol upgrade).
 - **Selectors** (`packages/e2e/src/selectors.ts`): centralized `data-testid` strings for DOM queries
-- **Test files**: one per FEAT-003 requirement (connection, role-confirmation, turn-timer, driver-visibility, manual-driver-picker, rotation-order, grace-period, host-disconnect, control-rejection, session-ended, early-end-affordance)
+- **Test helpers** (`packages/e2e/src/test-helpers.ts`): `waitForSelector`/`waitForEvaluate` polling helpers — all `WebView.evaluate()` calls use the IIFE pattern (`(() => ...)()`), since plain arrow-function strings are never invoked by the WebView bridge
+- **Test files**: one per FEAT-003 requirement (connection, role-confirmation, turn-timer, driver-visibility, manual-driver-picker, rotation-order, grace-period, host-disconnect, control-rejection, session-ended, early-end-affordance), plus `host-disconnect-live-update.test.ts` documenting the known gap
 
 #### Coverage
 
@@ -384,6 +442,8 @@ Render-level tests verify that the FEAT-003 UI surfaces are actually mounted and
 bun run typecheck
 ```
 
+Runs `tsc` across `packages/shared`, `packages/server`, `packages/client`, and `packages/e2e`.
+
 ### Building (Client SPA)
 
 ```bash
@@ -403,26 +463,29 @@ Future: add Railway deployment templates (`railway.json`, `railway.toml`).
 
 ## Future Roadmap
 
+Nothing in this section has been started — these are intentionally out of scope for FEAT-001 through FEAT-004:
+
 - **Persistent storage:** PostgreSQL (users, session metadata, saved code snapshots) + Redis (ephemeral session state, presence, pub/sub fanout)
 - **In-browser execution:** WebAssembly/Web Worker sandbox, REPL, stateful runtime
 - **Autocomplete & IntelliSense:** semantic code completion for supported languages
 - **Gamification:** points, badges, streaks, leaderboards
-- **Session transcripts:** optional post-session history/export (future feature, not in FEAT-001)
+- **Session transcripts:** optional post-session history/export
 - **LAN/P2P transport:** local network fallback (designed for, not implemented)
+- **Fixes for the [Known Gaps](#known-gaps-documented-not-yet-fixed):** duplicate-name detection/disambiguation, host-disconnect real-time broadcast, host-rejoin endpoint + UI
 
 ## Contributing
 
-See `docs/requirements/FEAT-001-turn-based-code-relay/` and `docs/requirements/FEAT-002-docker-compose-integration/` for detailed requirements, design decisions, and task breakdowns.
+See `docs/requirements/FEAT-001-turn-based-code-relay/` through `docs/requirements/FEAT-004-e2e-ui-testing/` for detailed requirements, design decisions, and task breakdowns for each shipped feature.
 
-### For Reviewers: Bugfix Documentation
+### For Reviewers: Bugfix & Gap Documentation
 
-Fixes for UX/session-management gaps (own-cursor visibility, host admin controls, driver early-end, host disconnect indicator) are documented in `docs/bugfixes/`:
+Fixes and known gaps are documented in `docs/bugfixes/`:
 
-- `docs/bugfixes/INDEX.md` — navigation, summary table, test results, commit history
-- `docs/bugfixes/BUGFIX-001-own-cursor-visibility.md` through `BUGFIX-004-host-disconnect-indicator.md` — per-fix root cause, solution, tests, requirements compliance
+- `docs/bugfixes/INDEX.md` — navigation, summary table, test results, commit history. **Start here.**
+- `docs/bugfixes/BUGFIX-001` through `BUGFIX-005` — UX/session-management fixes (own-cursor visibility, host admin controls, driver early-end, host disconnect indicator baseline, nginx CRLF crash)
+- `docs/bugfixes/BUGFIX-006-url-based-room-autojoin.md` / `BUGFIX-007-e2e-test-timing-and-reliability.md` — the URL auto-join feature and e2e timing fixes that unblocked most of FEAT-004's test suite
+- `docs/bugfixes/GAPS-duplicate-names-host-disconnect-rejoin.md` — the three currently-known, currently-unfixed gaps (see [Known Gaps](#known-gaps-documented-not-yet-fixed) above)
 - `docs/bugfixes/HOST_UX_FLOW.md` — end-to-end walkthrough of the host experience (room creation → configuration → turn management → session end)
-
-Use `docs/bugfixes/INDEX.md` as the entry point; it supersedes the root-level investigation/summary notes from the initial analysis pass.
 
 ## License
 
