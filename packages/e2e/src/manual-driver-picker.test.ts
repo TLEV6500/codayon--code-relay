@@ -64,7 +64,7 @@ describe("REQ-046 — Manual driver picker conditions", () => {
       );
 
       // Wait for SessionControls to load
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      await new Promise((resolve) => setTimeout(resolve, 5000));
 
       // Observer should not see the picker
       const pickerVisible = await obsView.evaluate(

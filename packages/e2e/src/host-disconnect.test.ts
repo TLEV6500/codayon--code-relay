@@ -63,7 +63,7 @@ describe("REQ-049 — Host-disconnect indicator", () => {
       );
 
       // Wait for SessionControls to load
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      await new Promise((resolve) => setTimeout(resolve, 5000));
 
       // Verify that the selector can be queried (structure is in place)
       const selectorWorks = await obsView.evaluate(

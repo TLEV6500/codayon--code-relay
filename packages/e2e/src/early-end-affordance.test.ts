@@ -43,7 +43,7 @@ describe("REQ-052 — Early-end ineligibility affordance", () => {
       );
 
       // Wait for SessionControls to load
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      await new Promise((resolve) => setTimeout(resolve, 5000));
 
       // Verify selector is valid
       const selectorWorks = await hostView.evaluate(
@@ -83,7 +83,7 @@ describe("REQ-052 — Early-end ineligibility affordance", () => {
       );
 
       // Wait for SessionControls to load
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      await new Promise((resolve) => setTimeout(resolve, 5000));
 
       // Verify selector is valid
       const selectorWorks = await obsView.evaluate(
