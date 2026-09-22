@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { startHarness, type E2EHarness } from "./harness";
 import { selectors } from "./selectors";
+import { waitForSelector } from "./test-helpers";
 
 /**
  * REQ-043 — Role-gated UI reflects server-confirmed role, not the stale prop
@@ -36,13 +37,11 @@ describe("REQ-043 — Role-gated UI reflects server role, not stale prop", () =>
         `${harness.baseUrl}/room/${room.code}?clientToken=${room.observerClientToken}`,
       );
 
-      // Wait for the view to load
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
-      // Check that host-only controls are NOT visible as an observer
-      let hostControlsVisible = await obsView.evaluate(
-        `() => !!document.querySelector('${selectors.sessionControls}')`,
-      );
+      // Wait for the view to load with polling
+      let hostControlsVisible = await waitForSelector(obsView, selectors.sessionControls, {
+        timeoutMs: 5000,
+        pollIntervalMs: 100,
+      });
       expect(hostControlsVisible).toBe(true); // SessionControls is there, but...
 
       // Check that the "Configure & Start Session" button (host-only) is NOT present
