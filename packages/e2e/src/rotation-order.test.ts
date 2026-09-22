@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { startHarness, type E2EHarness } from "./harness";
 import { selectors } from "./selectors";
+import { waitForSelector } from "./test-helpers";
 
 /**
  * REQ-047 — Rotation order visibility + late-joiner insertion
@@ -30,13 +31,11 @@ describe("REQ-047 — Rotation order visibility + late-joiner insertion", () => 
         `${harness.baseUrl}/room/${room.code}?clientToken=${room.hostClientToken}`,
       );
 
-      // Wait for SessionControls to load
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
-      // Rotation order should not be visible before session starts
-      const rotationVisible = await hostView.evaluate(
-        `() => !!document.querySelector('${selectors.rotationOrderList}')`,
-      );
+      // Wait for selector with polling
+      const rotationVisible = await waitForSelector(hostView, selectors.rotationOrderList, {
+        timeoutMs: 5000,
+        pollIntervalMs: 100,
+      });
       expect(rotationVisible).toBe(false);
 
       hostView.close();
@@ -68,13 +67,11 @@ describe("REQ-047 — Rotation order visibility + late-joiner insertion", () => 
         `${harness.baseUrl}/room/${room.code}?clientToken=${room.observerClientToken}`,
       );
 
-      // Wait for both views to load
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
-      // Verify both views have SessionControls
-      const hostControlsVisible = await hostView.evaluate(
-        `() => !!document.querySelector('${selectors.sessionControls}')`,
-      );
+      // Wait for selector with polling
+      const hostControlsVisible = await waitForSelector(hostView, selectors.sessionControls, {
+        timeoutMs: 5000,
+        pollIntervalMs: 100,
+      });
       expect(hostControlsVisible).toBe(true);
 
       const obsControlsVisible = await obsView.evaluate(

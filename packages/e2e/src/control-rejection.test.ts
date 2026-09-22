@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { startHarness, type E2EHarness } from "./harness";
 import { selectors } from "./selectors";
+import { waitForSelector } from "./test-helpers";
 
 /**
  * REQ-050 — Control-rejection banner render + auto-dismiss
@@ -30,13 +31,11 @@ describe("REQ-050 — Control-rejection banner render + auto-dismiss", () => {
         `${harness.baseUrl}/room/${room.code}?clientToken=${room.observerClientToken}`,
       );
 
-      // Wait for SessionControls to load
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
-      // Banner should not be visible (no errors yet)
-      const bannerVisible = await obsView.evaluate(
-        `() => !!document.querySelector('${selectors.controlRejectionBanner}')`,
-      );
+      // Wait for selector with polling
+      const bannerVisible = await waitForSelector(obsView, selectors.controlRejectionBanner, {
+        timeoutMs: 5000,
+        pollIntervalMs: 100,
+      });
       expect(bannerVisible).toBe(false);
 
       obsView.close();

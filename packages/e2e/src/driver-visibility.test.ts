@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { startHarness, type E2EHarness } from "./harness";
 import { selectors } from "./selectors";
+import { waitForSelector } from "./test-helpers";
 
 /**
  * REQ-045 — Current driver and turn number are visible and consistent across views
@@ -37,18 +38,17 @@ describe("REQ-045 — Driver and turn number visibility across views", () => {
         `${harness.baseUrl}/room/${room.code}?clientToken=${room.observerClientToken}`,
       );
 
-      // Wait for both views to load
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
-      // Check that SessionControls is visible in both views
-      const hostControlsVisible = await hostView.evaluate(
-        `() => !!document.querySelector('${selectors.sessionControls}')`,
-      );
+      // Wait for both views to load with polling
+      const hostControlsVisible = await waitForSelector(hostView, selectors.sessionControls, {
+        timeoutMs: 5000,
+        pollIntervalMs: 100,
+      });
       expect(hostControlsVisible).toBe(true);
 
-      const obsControlsVisible = await obsView.evaluate(
-        `() => !!document.querySelector('${selectors.sessionControls}')`,
-      );
+      const obsControlsVisible = await waitForSelector(obsView, selectors.sessionControls, {
+        timeoutMs: 5000,
+        pollIntervalMs: 100,
+      });
       expect(obsControlsVisible).toBe(true);
 
       // In a real scenario with an active turn, we would verify:

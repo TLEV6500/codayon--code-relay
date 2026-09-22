@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { startHarness, type E2EHarness } from "./harness";
 import { selectors } from "./selectors";
+import { waitForSelector } from "./test-helpers";
 
 /**
  * REQ-046 — Manual driver picker visibility conditions
@@ -31,13 +32,11 @@ describe("REQ-046 — Manual driver picker conditions", () => {
         `${harness.baseUrl}/room/${room.code}?clientToken=${room.hostClientToken}`,
       );
 
-      // Wait for SessionControls to load
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
-      // Picker should not be visible before session starts or in round-robin mode
-      const pickerVisible = await hostView.evaluate(
-        `() => !!document.querySelector('${selectors.manualDriverPicker}')`,
-      );
+      // Wait for SessionControls to load with polling
+      const pickerVisible = await waitForSelector(hostView, selectors.manualDriverPicker, {
+        timeoutMs: 5000,
+        pollIntervalMs: 100,
+      });
       expect(pickerVisible).toBe(false);
 
       hostView.close();

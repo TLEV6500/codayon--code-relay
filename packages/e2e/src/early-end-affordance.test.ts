@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { startHarness, type E2EHarness } from "./harness";
 import { selectors } from "./selectors";
+import { waitForSelector } from "./test-helpers";
 
 /**
  * REQ-052 — Early-end ineligibility affordance
@@ -121,13 +122,11 @@ describe("REQ-052 — Early-end ineligibility affordance", () => {
         `${harness.baseUrl}/room/${room.code}?clientToken=${room.observerClientToken}`,
       );
 
-      // Wait for SessionControls to load
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
-      // Observer (non-driver) should not see the button
-      const buttonVisible = await obsView.evaluate(
-        `() => !!document.querySelector('${selectors.earlyEndButton}')`,
-      );
+      // Wait for selector with polling
+      const buttonVisible = await waitForSelector(obsView, selectors.earlyEndButton, {
+        timeoutMs: 5000,
+        pollIntervalMs: 100,
+      });
       expect(buttonVisible).toBe(false);
 
       obsView.close();

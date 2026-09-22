@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { startHarness, type E2EHarness } from "./harness";
 import { selectors } from "./selectors";
+import { waitForSelector } from "./test-helpers";
 
 /**
  * REQ-048 — Grace-period banner + host modal
@@ -30,13 +31,11 @@ describe("REQ-048 — Grace period banner + host modal", () => {
         `${harness.baseUrl}/room/${room.code}?clientToken=${room.hostClientToken}`,
       );
 
-      // Wait for SessionControls to load
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
-      // Banner should not be visible
-      const bannerVisible = await hostView.evaluate(
-        `() => !!document.querySelector('${selectors.gracePeriodBanner}')`,
-      );
+      // Wait for selector with polling
+      const bannerVisible = await waitForSelector(hostView, selectors.gracePeriodBanner, {
+        timeoutMs: 5000,
+        pollIntervalMs: 100,
+      });
       expect(bannerVisible).toBe(false);
 
       // Modal should not be visible
@@ -74,13 +73,11 @@ describe("REQ-048 — Grace period banner + host modal", () => {
         `${harness.baseUrl}/room/${room.code}?clientToken=${room.observerClientToken}`,
       );
 
-      // Wait for both views to load
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
-      // Both views should have SessionControls loaded
-      const hostControlsLoaded = await hostView.evaluate(
-        `() => !!document.querySelector('${selectors.sessionControls}')`,
-      );
+      // Wait for selector with polling
+      const hostControlsLoaded = await waitForSelector(hostView, selectors.sessionControls, {
+        timeoutMs: 5000,
+        pollIntervalMs: 100,
+      });
       expect(hostControlsLoaded).toBe(true);
 
       const obsControlsLoaded = await obsView.evaluate(

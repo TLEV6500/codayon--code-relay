@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { startHarness, type E2EHarness } from "./harness";
 import { selectors } from "./selectors";
+import { waitForSelector } from "./test-helpers";
 
 /**
  * REQ-049 — Host-disconnect indicator visibility
@@ -30,13 +31,11 @@ describe("REQ-049 — Host-disconnect indicator", () => {
         `${harness.baseUrl}/room/${room.code}?clientToken=${room.hostClientToken}`,
       );
 
-      // Wait for SessionControls to load
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
-      // Indicator should not be visible (host is connected)
-      const indicatorVisible = await hostView.evaluate(
-        `() => !!document.querySelector('${selectors.hostDisconnectIndicator}')`,
-      );
+      // Wait for selector with polling
+      const indicatorVisible = await waitForSelector(hostView, selectors.hostDisconnectIndicator, {
+        timeoutMs: 5000,
+        pollIntervalMs: 100,
+      });
       expect(indicatorVisible).toBe(false);
 
       hostView.close();

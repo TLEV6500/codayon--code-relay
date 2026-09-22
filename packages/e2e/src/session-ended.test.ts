@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { startHarness, type E2EHarness } from "./harness";
 import { selectors } from "./selectors";
+import { waitForSelector } from "./test-helpers";
 
 /**
  * REQ-051 — Session-ended teardown view
@@ -31,13 +32,11 @@ describe("REQ-051 — Session-ended teardown view", () => {
         `${harness.baseUrl}/room/${room.code}?clientToken=${room.hostClientToken}`,
       );
 
-      // Wait for SessionControls to load
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
-      // Session-ended view should not be visible (session not ended)
-      const sessionEndedVisible = await hostView.evaluate(
-        `() => !!document.querySelector('${selectors.sessionEndedView}')`,
-      );
+      // Wait for selector with polling
+      const sessionEndedVisible = await waitForSelector(hostView, selectors.sessionEndedView, {
+        timeoutMs: 5000,
+        pollIntervalMs: 100,
+      });
       expect(sessionEndedVisible).toBe(false);
 
       hostView.close();
