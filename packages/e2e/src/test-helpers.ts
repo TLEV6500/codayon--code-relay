@@ -18,27 +18,28 @@
  * @returns boolean - true if selector found, false if timeout reached
  */
 export async function waitForSelector(
-  view: Bun.WebView,
-  selector: string,
-  options?: { timeoutMs?: number; pollIntervalMs?: number }
+    view: Bun.WebView,
+    selector: string,
+    options?: { timeoutMs?: number; pollIntervalMs?: number }
 ): Promise<boolean> {
-  const { timeoutMs = 5000, pollIntervalMs = 100 } = options ?? {};
-  const startTime = Date.now();
+    const { timeoutMs = 5000, pollIntervalMs = 100 } = options ?? {};
+    const startTime = Date.now();
 
-  while (Date.now() - startTime < timeoutMs) {
-    const result = await view.evaluate(
-      `() => !!document.querySelector('${selector}')`
-    );
-    // Check if we got a valid boolean result (not {} or undefined)
-    if (result === true || result === false) {
-      return result;
+    while (Date.now() - startTime < timeoutMs) {
+        const result = await view.evaluate(
+            `(() => !!document.querySelector('${selector}'))()`
+        );
+
+        // Check if we got a valid boolean result (not {} or undefined)
+        if (result === true || result === false) {
+            return result;
+        }
+        // Wait before retrying
+        await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
     }
-    // Wait before retrying
-    await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
-  }
 
-  // Timeout reached; return false to indicate selector not found
-  return false;
+    // Timeout reached; return false to indicate selector not found
+    return false;
 }
 
 /**
@@ -54,27 +55,27 @@ export async function waitForSelector(
  * @returns any - The result of the JavaScript evaluation, or undefined if timeout
  */
 export async function waitForEvaluate<T = any>(
-  view: Bun.WebView,
-  code: string,
-  options?: { timeoutMs?: number; pollIntervalMs?: number }
+    view: Bun.WebView,
+    code: string,
+    options?: { timeoutMs?: number; pollIntervalMs?: number }
 ): Promise<T | undefined> {
-  const { timeoutMs = 5000, pollIntervalMs = 100 } = options ?? {};
-  const startTime = Date.now();
+    const { timeoutMs = 5000, pollIntervalMs = 100 } = options ?? {};
+    const startTime = Date.now();
 
-  while (Date.now() - startTime < timeoutMs) {
-    const result = await view.evaluate(code);
-    // Check if we got a valid result (not {} or undefined)
-    if (
-      result !== undefined &&
-      result !== null &&
-      (typeof result !== "object" || Object.keys(result).length > 0)
-    ) {
-      return result as T;
+    while (Date.now() - startTime < timeoutMs) {
+        const result = await view.evaluate(code);
+        // Check if we got a valid result (not {} or undefined)
+        if (
+            result !== undefined &&
+            result !== null &&
+            (typeof result !== "object" || Object.keys(result).length > 0)
+        ) {
+            return result as T;
+        }
+        // Wait before retrying
+        await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
     }
-    // Wait before retrying
-    await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
-  }
 
-  // Timeout reached
-  return undefined;
+    // Timeout reached
+    return undefined;
 }

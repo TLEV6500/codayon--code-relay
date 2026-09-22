@@ -43,18 +43,21 @@ describe("REQ-052 — Early-end ineligibility affordance", () => {
       );
 
       // Wait for SessionControls to load
-      await new Promise((resolve) => setTimeout(resolve, 5000));
+      const controlsLoaded = await waitForSelector(hostView, selectors.sessionControls, {
+        timeoutMs: 2000,
+        pollIntervalMs: 100,
+      });
 
       // Verify selector is valid
       const selectorWorks = await hostView.evaluate(
-        `() => {
+        `(() => {
           try {
             document.querySelectorAll('${selectors.earlyEndButton}');
             return true;
           } catch (e) {
             return false;
           }
-        }`,
+        })()`,
       );
       expect(selectorWorks).toBe(true);
 
@@ -83,18 +86,21 @@ describe("REQ-052 — Early-end ineligibility affordance", () => {
       );
 
       // Wait for SessionControls to load
-      await new Promise((resolve) => setTimeout(resolve, 5000));
+      const controlsLoaded = await waitForSelector(obsView, selectors.sessionControls, {
+        timeoutMs: 2000,
+        pollIntervalMs: 100,
+      });
 
       // Verify selector is valid
       const selectorWorks = await obsView.evaluate(
-        `() => {
+        `(() => {
           try {
             document.querySelectorAll('${selectors.earlyEndDisabledExplanation}');
             return true;
           } catch (e) {
             return false;
           }
-        }`,
+        })()`,
       );
       expect(selectorWorks).toBe(true);
 

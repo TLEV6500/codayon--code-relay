@@ -34,6 +34,10 @@ describe("REQ-045 — Driver and turn number visibility across views", () => {
       await hostView.navigate(
         `${harness.baseUrl}/room/${room.code}?clientToken=${room.hostClientToken}`,
       );
+      
+      // Wait for the host connection to establish before opening observer view
+      await new Promise(r => setTimeout(r, 1000));
+      
       await obsView.navigate(
         `${harness.baseUrl}/room/${room.code}?clientToken=${room.observerClientToken}`,
       );

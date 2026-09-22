@@ -46,7 +46,7 @@ describe("REQ-042 — SessionControls mounts once relay connects", () => {
 
       while (Date.now() - startTime < maxWaitMs) {
         const sessionControlsPresent = await hostView.evaluate(
-          `() => !!document.querySelector('${selectors.sessionControls}')`,
+          `(() => !!document.querySelector('${selectors.sessionControls}'))()`,
         );
         if (sessionControlsPresent) {
           found = true;

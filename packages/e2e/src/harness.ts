@@ -80,10 +80,10 @@ export async function startHarness(): Promise<E2EHarness> {
     const serverUrl = `http://127.0.0.1:${serverPort}`;
 
     // Boot the client server on port 0.
-    // It serves static files from dist, reverse-proxies /api + /ws to the server.
+    // It serves static files from dist, and proxies /api + /ws to the server.
     const clientServer = Bun.serve({
         port: 0,
-        async fetch(req) {
+        async fetch(req, server) {
             const url = new URL(req.url);
 
             // Proxy /api requests to the server.
@@ -96,19 +96,13 @@ export async function startHarness(): Promise<E2EHarness> {
                 });
             }
 
-            // For /ws, we need to handle the upgrade. However, Bun.WebView doesn't
-            // support WebSocket upgrade forwarding at the static-server level in the
-            // same way. Instead, we'll handle raw socket upgrades manually.
+            // For /ws, upgrade to WebSocket and proxy to the server's WebSocket.
             if (url.pathname === "/ws") {
-                const upgrade = req.headers.get("upgrade")?.toLowerCase();
-                if (upgrade === "websocket") {
-                    // Upgrade to WS against the real server.
-                    const targetUrl = `${serverUrl}${url.pathname}`;
-                    return fetch(targetUrl, {
-                        method: req.method,
-                        headers: req.headers,
-                        body: req.method !== "GET" && req.method !== "HEAD" ? req.body : undefined,
-                    });
+                // Use Bun's native upgrade support to proxy the WebSocket connection.
+                // The success field being truthy indicates Bun has taken over the socket.
+                const upgraded = server.upgrade(req);
+                if (upgraded) {
+                    return undefined; // Bun has handled it
                 }
             }
 
@@ -139,6 +133,103 @@ export async function startHarness(): Promise<E2EHarness> {
             }
 
             return new Response("Not found", { status: 404 });
+        },
+        websocket: {
+            // Handle WebSocket connections from clients and proxy them to the server.
+            async open(ws) {
+                const url = new URL(ws.url ?? "http://localhost/ws");
+                const code = url.searchParams.get("code");
+                const clientToken = url.searchParams.get("clientToken");
+
+                if (!code || !clientToken) {
+                    ws.close(1008, "Missing code or clientToken");
+                    return;
+                }
+
+                // Connect to the actual server's WebSocket
+                const serverWsUrl = new URL(serverUrl);
+                serverWsUrl.protocol = serverWsUrl.protocol === "https:" ? "wss:" : "ws:";
+                serverWsUrl.pathname = "/ws";
+                serverWsUrl.searchParams.set("code", code);
+                serverWsUrl.searchParams.set("clientToken", clientToken);
+
+                try {
+                    const serverWs = new WebSocket(serverWsUrl.toString());
+                    let isActive = true;
+                    
+                    // Safety timeout: close connection after 5 minutes of inactivity or creation
+                    const timeout = setTimeout(() => {
+                        if (isActive && serverWs.readyState === WebSocket.OPEN) {
+                            serverWs.close();
+                        }
+                    }, 5 * 60 * 1000);
+                    
+                    // Proxy messages from client to server
+                    ws.onmessage = (msg) => {
+                        if (serverWs.readyState === WebSocket.OPEN) {
+                            serverWs.send(msg.data);
+                        }
+                    };
+
+                    // Proxy messages from server to client
+                    serverWs.onmessage = (msg) => {
+                        if (ws.readyState === 1) { // OPEN
+                            ws.send(msg.data);
+                        }
+                    };
+
+                    serverWs.onclose = () => {
+                        isActive = false;
+                        clearTimeout(timeout);
+                        try {
+                            ws.close();
+                        } catch {
+                            // Already closed
+                        }
+                    };
+
+                    serverWs.onerror = () => {
+                        isActive = false;
+                        clearTimeout(timeout);
+                        try {
+                            ws.close(1011, "Server error");
+                        } catch {
+                            // Already closed
+                        }
+                    };
+                    
+                    // Store reference so we can close it when client disconnects
+                    (ws as any)._serverWs = serverWs;
+                    (ws as any)._timeout = timeout;
+                } catch (error) {
+                    try {
+                        ws.close(1011, "Failed to connect to server");
+                    } catch {
+                        // Already closed
+                    }
+                }
+            },
+            close(ws) {
+                // Close the server-side WebSocket when client disconnects
+                const serverWs = (ws as any)._serverWs;
+                const timeout = (ws as any)._timeout;
+                
+                if (timeout) {
+                    clearTimeout(timeout);
+                }
+                
+                if (serverWs && serverWs.readyState === WebSocket.OPEN) {
+                    console.log("[WebSocket] Closing server connection for client");
+                    try {
+                        serverWs.close();
+                    } catch {
+                        // Already closed
+                    }
+                }
+            },
+            message(ws, msg) {
+                // Handled in open()
+            },
         },
     });
 

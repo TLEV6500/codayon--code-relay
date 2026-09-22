@@ -64,18 +64,21 @@ describe("REQ-051 — Session-ended teardown view", () => {
       );
 
       // Wait for SessionControls to load
-      await new Promise((resolve) => setTimeout(resolve, 5000));
+      const controlsLoaded = await waitForSelector(obsView, selectors.sessionControls, {
+        timeoutMs: 2000,
+        pollIntervalMs: 100,
+      });
 
       // Verify that the selector is valid DOM syntax
       const selectorWorks = await obsView.evaluate(
-        `() => {
+        `(() => {
           try {
             document.querySelectorAll('${selectors.returnToLobby}');
             return true;
           } catch (e) {
             return false;
           }
-        }`,
+        })()`,
       );
       expect(selectorWorks).toBe(true);
 

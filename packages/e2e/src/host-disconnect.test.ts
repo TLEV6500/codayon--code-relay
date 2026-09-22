@@ -63,11 +63,14 @@ describe("REQ-049 — Host-disconnect indicator", () => {
       );
 
       // Wait for SessionControls to load
-      await new Promise((resolve) => setTimeout(resolve, 5000));
+      const controlsLoaded = await waitForSelector(obsView, selectors.sessionControls, {
+        timeoutMs: 2000,
+        pollIntervalMs: 100,
+      });
 
       // Verify that the selector can be queried (structure is in place)
       const selectorWorks = await obsView.evaluate(
-        `() => {
+        `(() => {
           // This just verifies the selector is valid DOM syntax
           try {
             document.querySelectorAll('${selectors.hostDisconnectIndicator}');
@@ -75,7 +78,7 @@ describe("REQ-049 — Host-disconnect indicator", () => {
           } catch (e) {
             return false;
           }
-        }`,
+        })()`,
       );
       expect(selectorWorks).toBe(true);
 

@@ -21,7 +21,7 @@ Each task is a working, demoable increment. No orphaned code.
   - **Status:** done — landed as commit `028d3fc` on this branch ahead of
     the e2e package scaffolding below.
 
-- [ ] **Task 1 — Scaffold `packages/e2e` workspace package**
+- [x] **Task 1 — Scaffold `packages/e2e` workspace package**
   - New `packages/e2e/package.json` (workspace member, `@codayon/e2e`),
     `tsconfig.json` extending the repo base config.
   - Add `test:e2e` script at the repo root (`bun test packages/e2e`),
@@ -31,7 +31,7 @@ Each task is a working, demoable increment. No orphaned code.
     package; root `bun test` (no args) does NOT pick up `packages/e2e` by
     accident (confirms isolation from the fast default suite).
 
-- [ ] **Task 2 — Harness: real server + static client on ephemeral ports**
+- [x] **Task 2 — Harness: real server + static client on ephemeral ports**
   - `packages/e2e/src/harness.ts`: `startHarness()` boots the real Hono/WS
     server (reusing `createAppWithDeps`/`createWebSocketHandler`/
     `tryUpgrade` from `@codayon/server`) on `port: 0`; a second `Bun.serve`
@@ -49,7 +49,7 @@ Each task is a working, demoable increment. No orphaned code.
     (best-effort: a second `startHarness()` in the same test succeeds,
     implying the first's ports were released).
 
-- [ ] **Task 3 — `data-testid` hooks on FEAT-003 UI surfaces**
+- [x] **Task 3 — `data-testid` hooks on FEAT-003 UI surfaces**
   - Add additive `data-testid` attributes (no behavioral change) to:
     `session-controls`, `turn-countdown`, `current-driver`,
     `you-are-driving`, `turn-number`, `manual-driver-picker`,
@@ -64,7 +64,7 @@ Each task is a working, demoable increment. No orphaned code.
     unchanged — confirms the attributes are additive only; `vite build`
     succeeds.
 
-- [ ] **Task 4 — Regression test: SessionControls mounts (REQ-042)**
+- [x] **Task 4 — Regression test: SessionControls mounts (REQ-042)**
   - `packages/e2e/src/connection.test.ts`: single view, create+join a room,
     navigate, assert `[data-testid="session-controls"]` becomes present
     within a bounded wait.
@@ -74,72 +74,72 @@ Each task is a working, demoable increment. No orphaned code.
     timeout error, then restore the fix and confirm it passes — proves the
     test actually catches the defect it's named for.
 
-- [ ] **Task 5 — Regression test: role-gated UI reflects server role (REQ-043)**
+- [x] **Task 5 — Regression test: role-gated UI reflects server role (REQ-043)**
   - `packages/e2e/src/role-confirmation.test.ts`: join as spectator, drive a
     role change server-side (host action or direct API per the harness),
     assert the spectator view's role-gated controls update in the DOM
     without a reload.
   - **Requirements:** REQ-043.
 
-- [ ] **Task 6 — Turn countdown render test (REQ-044)**
+- [x] **Task 6 — Turn countdown render test (REQ-044)**
   - `packages/e2e/src/turn-timer.test.ts`: start a short-duration
     (`fixed`/`fixed-early-end`) turn, sample the rendered countdown twice a
     few seconds apart, assert it decreased; assert absence pre-turn-start.
   - **Requirements:** REQ-044.
 
-- [ ] **Task 7 — Driver & turn-number visibility across views (REQ-045)**
+- [x] **Task 7 — Driver & turn-number visibility across views (REQ-045)**
   - `packages/e2e/src/driver-visibility.test.ts`: two views (host +
     observer) in one room; start a turn; assert both views' rendered driver
     name match; assert "you are driving" is present only in the driving
     view.
   - **Requirements:** REQ-045.
 
-- [ ] **Task 8 — Manual driver picker conditions (REQ-046)**
+- [x] **Task 8 — Manual driver picker conditions (REQ-046)**
   - `packages/e2e/src/manual-driver-picker.test.ts`: assert picker DOM
     presence/absence across the host/non-host, manual/round-robin, and
     turn-eligible/non-eligible axes; assert its rendered options match the
     connected, non-spectator roster.
   - **Requirements:** REQ-046.
 
-- [ ] **Task 9 — Rotation order visibility + late-joiner insertion (REQ-047)**
+- [x] **Task 9 — Rotation order visibility + late-joiner insertion (REQ-047)**
   - `packages/e2e/src/rotation-order.test.ts`: round-robin session, assert
     rendered order list + next-up highlight; join a new participant
     mid-session via a second view, assert their name appears in the
     rendered list after the next update.
   - **Requirements:** REQ-047.
 
-- [ ] **Task 10 — Grace period banner + host modal (REQ-048)**
+- [x] **Task 10 — Grace period banner + host modal (REQ-048)**
   - `packages/e2e/src/grace-period.test.ts`: open a driver's view, close it
     mid-turn (`view.close()`), assert the banner renders in every remaining
     view and the reassign/extend/skip modal renders only in the host's
     view; resolve via the host UI, assert the banner clears everywhere.
   - **Requirements:** REQ-048.
 
-- [ ] **Task 11 — Host-disconnect indicator (REQ-049)**
+- [x] **Task 11 — Host-disconnect indicator (REQ-049)**
   - `packages/e2e/src/host-disconnect.test.ts`: close the host's view,
     assert the indicator renders in a remaining view without first toggling
     the roster panel.
   - **Requirements:** REQ-049.
 
-- [ ] **Task 12 — Control-rejection banner render + auto-dismiss (REQ-050)**
+- [x] **Task 12 — Control-rejection banner render + auto-dismiss (REQ-050)**
   - `packages/e2e/src/control-rejection.test.ts`: trigger a rejected action
     from a non-host view, assert the rendered rejection text, then assert
     it's gone after the documented auto-dismiss window elapses.
   - **Requirements:** REQ-050.
 
-- [ ] **Task 13 — Session-ended teardown view (REQ-051)**
+- [x] **Task 13 — Session-ended teardown view (REQ-051)**
   - `packages/e2e/src/session-ended.test.ts`: host ends the session; assert
     the live editor/controls are gone and the ended-state screen +
     return-to-lobby control are present, in every open view.
   - **Requirements:** REQ-051.
 
-- [ ] **Task 14 — Early-end ineligibility affordance (REQ-052)**
+- [x] **Task 14 — Early-end ineligibility affordance (REQ-052)**
   - `packages/e2e/src/early-end-affordance.test.ts`: driver in `fixed` mode;
     assert the early-end control is present, disabled, with explanatory
     text (not absent).
   - **Requirements:** REQ-052.
 
-- [ ] **Task 15 — Documentation: browser dependency + how to run**
+- [x] **Task 15 — Documentation: browser dependency + how to run**
   - Root `README.md`: new "End-to-End UI Tests" section documenting the
     Chrome/Chromium/Edge/Brave requirement (NFR-017/REQ-041), how to run
     (`bun run test:e2e`), and that it's separate from the default `bun

@@ -37,6 +37,9 @@ describe("REQ-043 — Role-gated UI reflects server role, not stale prop", () =>
         `${harness.baseUrl}/room/${room.code}?clientToken=${room.observerClientToken}`,
       );
 
+      // Wait longer for the connection to establish
+      await new Promise(r => setTimeout(r, 1000));
+
       // Wait for the view to load with polling
       let hostControlsVisible = await waitForSelector(obsView, selectors.sessionControls, {
         timeoutMs: 5000,
@@ -46,7 +49,7 @@ describe("REQ-043 — Role-gated UI reflects server role, not stale prop", () =>
 
       // Check that the "Configure & Start Session" button (host-only) is NOT present
       const hostButtonVisible = await obsView.evaluate(
-        `() => !!Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('Configure'))`,
+        `(() => !!Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('Configure')))()`,
       );
       expect(hostButtonVisible).toBe(false);
 

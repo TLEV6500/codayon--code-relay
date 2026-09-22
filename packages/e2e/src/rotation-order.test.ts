@@ -39,6 +39,8 @@ describe("REQ-047 — Rotation order visibility + late-joiner insertion", () => 
       expect(rotationVisible).toBe(false);
 
       hostView.close();
+      // Wait for server to clean up connection before next test
+      await new Promise(r => setTimeout(r, 1000));
     } catch (e) {
       const err = e instanceof Error ? e.message : String(e);
       if (
@@ -63,6 +65,10 @@ describe("REQ-047 — Rotation order visibility + late-joiner insertion", () => 
       await hostView.navigate(
         `${harness.baseUrl}/room/${room.code}?clientToken=${room.hostClientToken}`,
       );
+      
+      // Wait for the host connection to establish before opening observer view
+      await new Promise(r => setTimeout(r, 1000));
+      
       await obsView.navigate(
         `${harness.baseUrl}/room/${room.code}?clientToken=${room.observerClientToken}`,
       );
@@ -75,7 +81,7 @@ describe("REQ-047 — Rotation order visibility + late-joiner insertion", () => 
       expect(hostControlsVisible).toBe(true);
 
       const obsControlsVisible = await obsView.evaluate(
-        `() => !!document.querySelector('${selectors.sessionControls}')`,
+        `(() => !!document.querySelector('${selectors.sessionControls}'))()`,
       );
       expect(obsControlsVisible).toBe(true);
 

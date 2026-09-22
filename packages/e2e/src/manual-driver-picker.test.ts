@@ -63,12 +63,15 @@ describe("REQ-046 — Manual driver picker conditions", () => {
         `${harness.baseUrl}/room/${room.code}?clientToken=${room.observerClientToken}`,
       );
 
-      // Wait for SessionControls to load
-      await new Promise((resolve) => setTimeout(resolve, 5000));
+      // Wait for SessionControls to load with polling
+      const controlsLoaded = await waitForSelector(obsView, selectors.sessionControls, {
+        timeoutMs: 2000,
+        pollIntervalMs: 100,
+      });
 
       // Observer should not see the picker
       const pickerVisible = await obsView.evaluate(
-        `() => !!document.querySelector('${selectors.manualDriverPicker}')`,
+        `(() => !!document.querySelector('${selectors.manualDriverPicker}'))()`,
       );
       expect(pickerVisible).toBe(false);
 

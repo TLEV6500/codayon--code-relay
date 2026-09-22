@@ -63,18 +63,21 @@ describe("REQ-050 — Control-rejection banner render + auto-dismiss", () => {
       );
 
       // Wait for SessionControls to load
-      await new Promise((resolve) => setTimeout(resolve, 5000));
+      const controlsLoaded = await waitForSelector(hostView, selectors.sessionControls, {
+        timeoutMs: 2000,
+        pollIntervalMs: 100,
+      });
 
       // Verify that the selector is valid DOM syntax
       const selectorWorks = await hostView.evaluate(
-        `() => {
+        `(() => {
           try {
             document.querySelectorAll('${selectors.controlRejectionBanner}');
             return true;
           } catch (e) {
             return false;
           }
-        }`,
+        })()`,
       );
       expect(selectorWorks).toBe(true);
 
