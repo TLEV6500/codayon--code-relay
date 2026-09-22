@@ -194,6 +194,40 @@ client UI.
 
 ---
 
+### 📝 GAPS: Duplicate Names, Host-Disconnect Broadcast, and Host-Rejoin
+
+**File:** `GAPS-duplicate-names-host-disconnect-rejoin.md`
+
+**Issue:** Three follow-up gaps found after FEAT-003/FEAT-004: (1) no
+duplicate-name detection on join/rejoin, (2) host/participant disconnect
+doesn't broadcast to other clients in real time, (3) no "rejoin as host"
+UI/backend path exists.
+
+**Root Cause:** (1) `rooms.ts::join()` / `engine.ts::participantJoined` never
+check name uniqueness. (2) `ws.ts::close()` only calls
+`broadcastSessionState()` on the driver-disconnect grace-period path, never
+for a plain host/observer disconnect. (3) `routes/rooms.ts` has no endpoint
+accepting `hostToken` to remint a host `clientToken`; `App.tsx`'s lobby has
+no corresponding UI.
+
+**Fix:** None applied — by explicit product decision, this pass only adds
+gap-documentation tests (Gap 1 and 3 tests pass, documenting current
+permissive/absent behavior; Gap 2 tests fail/time out, proving the real bug).
+
+**Impact:** Medium (roster identity confusion, stale disconnect UI, hosts
+locked out of their own session)  
+**Complexity:** N/A (no fix implemented)  
+**Status:** 📝 Documented, fixes deferred
+
+**Key Changes:**
+- NEW: `packages/shared/src/engine.duplicate-names.test.ts`
+- NEW: `packages/server/src/rooms.duplicate-names.test.ts`
+- NEW: `packages/server/src/ws.host-disconnect-broadcast.test.ts` (expected to fail)
+- NEW: `packages/e2e/src/host-disconnect-live-update.test.ts` (expected to fail)
+- `packages/client/src/App.test.ts`: appended new describe block (no production code changed)
+
+---
+
 ## Quick Navigation
 
 | Document | Type | Audience | Purpose |
@@ -205,6 +239,7 @@ client UI.
 | [BUGFIX-003](BUGFIX-003-driver-early-end.md) | Spec | Reviewers, Testers | Driver early-end action |
 | [BUGFIX-004](BUGFIX-004-host-disconnect-indicator.md) | Spec | Reviewers, Testers | Roster with connection status |
 | [BUGFIX-005](BUGFIX-005-nginx-crlf-entrypoint-crash.md) | Spec | Reviewers, DevOps | nginx CRLF crash — Docker stack outage |
+| [GAPS-duplicate-names-host-disconnect-rejoin](GAPS-duplicate-names-host-disconnect-rejoin.md) | Gap doc | Reviewers, Testers | Duplicate names, disconnect broadcast, host-rejoin gaps (tests only, no fixes) |
 
 ---
 

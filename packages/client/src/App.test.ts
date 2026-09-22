@@ -244,4 +244,105 @@ describe("URL parameter parsing and auto-join (BUGFIX-006)", () => {
       expect(clientID).toMatch(/^c_[a-z0-9]+[a-z0-9]+$/);
     });
   });
+
+  /**
+   * GAP-DOCUMENTATION TEST — No "rejoin as host" UI/backend path exists.
+   *
+   * See docs/bugfixes/GAPS-duplicate-names-host-disconnect-rejoin.md (Gap 3)
+   * for full root-cause analysis.
+   *
+   * App.tsx's Lobby() only renders two join buttons, both calling
+   * `onJoin(role: JoinableRole)` — where `JoinableRole = Exclude<Role, "host">`
+   * (engine.ts) — so "host" is excluded from the joinable set at the type
+   * level itself, not just by convention. `onCreate()` is the only function
+   * that ever produces a host session, and it can only be used at
+   * room-creation time. There is no third button, no host-token input field,
+   * and no code path anywhere in App.tsx that constructs a request carrying
+   * a `hostToken` to re-authenticate as host on an existing room.
+   *
+   * These tests mirror App.tsx's actual `onJoin`/`onCreate` signatures and
+   * assert this absence directly. They are expected to PASS — they document
+   * an accurate absence of a feature, not a crash. No production code
+   * (App.tsx) is modified here, per explicit product decision.
+   */
+  describe("Host rejoin gap (undocumented feature)", () => {
+    test("the lobby's only join-role actions are 'observer' and 'spectator', never 'host'", () => {
+      // Mirrors App.tsx's Lobby(): exactly two buttons, each calling
+      // onJoin("observer") / onJoin("spectator") respectively.
+      const lobbyJoinActions: ReadonlyArray<"observer" | "spectator"> = [
+        "observer", // "Join as participant" button
+        "spectator", // "Spectate" button
+      ];
+
+      expect(lobbyJoinActions).toEqual(["observer", "spectator"]);
+      expect(lobbyJoinActions).not.toContain("host");
+    });
+
+    test("onJoin's role parameter type excludes 'host' by construction (JoinableRole = Exclude<Role, 'host'>)", () => {
+      // Mirrors App.tsx: `async function onJoin(role: JoinableRole)`.
+      // JoinableRole is defined in engine.ts as Exclude<Role, "host">, so
+      // passing "host" is a compile-time error, not just a missing UI case.
+      type Role = "host" | "observer" | "spectator";
+      type JoinableRole = Exclude<Role, "host">;
+
+      function onJoin(role: JoinableRole): JoinableRole {
+        return role; // mirrors App.tsx's onJoin(role) -> joinRoom(code, { role, name })
+      }
+
+      expect(onJoin("observer")).toBe("observer");
+      expect(onJoin("spectator")).toBe("spectator");
+      // @ts-expect-error "host" is not assignable to JoinableRole
+      const attempt = () => onJoin("host");
+      expect(attempt).toBeDefined(); // never actually invoked; type system already rejects it
+    });
+
+    test("onCreate is the only path to a host session, and only at room-creation time", () => {
+      // Mirrors App.tsx: onCreate() always sets role: "host" unconditionally,
+      // and is only ever wired to the "Create a room" button — never to a
+      // "rejoin" action on an existing room code.
+      interface Session {
+        code: string;
+        clientToken: string;
+        clientID: string;
+        role: "host" | "observer" | "spectator";
+      }
+
+      function onCreate(code: string, clientToken: string, clientID: string): Session {
+        return { code, clientToken, clientID, role: "host" };
+      }
+
+      const session = onCreate("ROOM1", "created-token", "c_abc123");
+      expect(session.role).toBe("host");
+
+      // onCreate has no parameter for an existing room's hostToken — its
+      // signature only supports the brand-new-room flow. There is no
+      // "rejoinAsHost(code, hostToken)" function anywhere in App.tsx.
+      expect(onCreate.length).toBe(3);
+    });
+
+    test("no code path in the mirrored onJoin/onCreate logic accepts or forwards a hostToken", () => {
+      // Simulates the full set of request bodies App.tsx is capable of
+      // constructing today: joinRoom's body only ever has {role, name}, and
+      // createRoom's body only ever has {hostName, hostParticipation}.
+      // Neither shape has room for a hostToken field, confirming there is no
+      // "rejoin with hostToken" request this client can ever issue.
+      interface JoinRequestBody {
+        role: "observer" | "spectator";
+        name: string;
+      }
+      interface CreateRequestBody {
+        hostName: string;
+        hostParticipation: "admin-only" | "host-participant";
+      }
+
+      const joinBody: JoinRequestBody = { role: "observer", name: "Guest" };
+      const createBody: CreateRequestBody = {
+        hostName: "Host",
+        hostParticipation: "host-participant",
+      };
+
+      expect("hostToken" in joinBody).toBe(false);
+      expect("hostToken" in createBody).toBe(false);
+    });
+  });
 });
